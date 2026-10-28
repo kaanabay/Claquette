@@ -1,0 +1,111 @@
+@import "tailwindcss";
+
+/* Warm neutrals + clapperboard amber. Tokens follow shadcn/ui naming. */
+:root {
+  --background: oklch(0.985 0.004 85);
+  --foreground: oklch(0.21 0.012 60);
+  --card: oklch(1 0 0);
+  --muted: oklch(0.955 0.007 85);
+  --muted-foreground: oklch(0.5 0.014 60);
+  --border: oklch(0.905 0.009 85);
+  --input: oklch(0.87 0.011 85);
+  --primary: oklch(0.8 0.155 78);
+  --primary-foreground: oklch(0.24 0.04 60);
+  --accent: oklch(0.96 0.03 85);
+  --destructive: oklch(0.58 0.21 27);
+  --success: oklch(0.6 0.13 155);
+  --ring: oklch(0.72 0.15 75);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: oklch(0.165 0.008 60);
+    --foreground: oklch(0.955 0.005 85);
+    --card: oklch(0.205 0.01 60);
+    --muted: oklch(0.245 0.011 60);
+    --muted-foreground: oklch(0.72 0.014 70);
+    --border: oklch(0.3 0.012 60);
+    --input: oklch(0.36 0.013 60);
+    --primary: oklch(0.82 0.15 80);
+    --primary-foreground: oklch(0.21 0.035 60);
+    --accent: oklch(0.27 0.025 70);
+    --destructive: oklch(0.66 0.2 27);
+    --success: oklch(0.72 0.14 155);
+    --ring: oklch(0.76 0.14 80);
+  }
+}
+
+/* Paper is light whatever the screen's theme. */
+@media print {
+  :root {
+    color-scheme: light;
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.2 0.01 60);
+    --card: oklch(1 0 0);
+    --muted: oklch(0.96 0.005 85);
+    --muted-foreground: oklch(0.45 0.014 60);
+    --border: oklch(0.86 0.009 85);
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-ring: var(--ring);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@layer base {
+  *,
+  ::before,
+  ::after {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background: var(--background);
+    color: var(--foreground);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+}
+
+@theme {
+  --animate-toast-in: toast-in 180ms ease-out;
+
+  @keyframes toast-in {
+    from {
+      opacity: 0;
+      transform: translateY(0.5rem);
+    }
+  }
+}
+
+/* Something that was just added lights up for a moment (see components/ui/highlight.ts). */
+@keyframes just-added {
+  0%,
+  40% {
+    box-shadow: 0 0 0 3px var(--color-primary);
+  }
+  100% {
+    box-shadow: 0 0 0 3px transparent;
+  }
+}
+
+[data-just-added] {
+  animation: just-added 3s ease-out;
+}

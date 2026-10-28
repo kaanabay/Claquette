@@ -1,0 +1,2 @@
+# Same line endings everywhere (Windows checkouts included): the deploy target is Linux.
+* text=auto eol=lf
