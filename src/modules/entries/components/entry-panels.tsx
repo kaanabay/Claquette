@@ -1,4 +1,4 @@
-import { CalendarPlus, Lock, MoveRight, ThumbsUp, Trash, Undo2 } from "lucide-react";
+import { CalendarPlus, Clock, Lock, MoveRight, ThumbsUp, Trash, Undo2 } from "lucide-react";
 import { ActionForm } from "@/components/ui/action-form";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -21,15 +21,26 @@ export function StateActions({
   entryId,
   current,
   transitions,
+  waiting = null,
 }: {
   entryId: string;
   current: EntryPageData["current"];
   transitions: EntryPageData["transitions"];
+  /** Who hasn't finished it yet, when its round is over ("Zamanı geçti"). */
+  waiting?: string | null;
 }) {
   return (
     <div className="flex flex-col gap-3">
-      <p className="flex items-center gap-2 text-sm">
+      <p className="flex flex-wrap items-center gap-2 text-sm">
         Şu anki durum <Badge tone={current.color}>{current.label}</Badge>
+        {waiting ? (
+          <>
+            <Badge tone="amber">
+              <Clock /> Zamanı geçti
+            </Badge>
+            <span className="text-xs text-muted-foreground">Henüz bitirmeyen: {waiting}</span>
+          </>
+        ) : null}
       </p>
       {transitions.length > 0 ? (
         <ActionForm action={changeEntryStateAction} className="flex flex-wrap gap-2">
@@ -69,6 +80,7 @@ export function PlanActions({
           entryId={entryId}
           options={plan.options}
           defaultIndex={plan.defaultIndex}
+          participantCount={plan.participantCount}
           label={
             <>
               <CalendarPlus /> Plana ekle
@@ -90,6 +102,8 @@ export function PlanActions({
           options={plan.options}
           defaultIndex={plan.defaultIndex}
           currentIndex={roundIndex}
+          askFinished={plan.askFinished}
+          participantCount={plan.participantCount}
           label={
             <>
               <MoveRight /> Taşı

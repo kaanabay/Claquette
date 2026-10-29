@@ -6,7 +6,6 @@ import {
   isPlanStateChangeAllowed,
   lastRoundIndex,
   listSlots,
-  placementCategory,
   planHorizon,
   slotTiming,
 } from "./plan";
@@ -29,8 +28,6 @@ describe("round positions", () => {
   it("classifies rounds around the current one", () => {
     expect([0, 1, 2].map((index) => slotTiming(index, 1))).toEqual(["past", "current", "future"]);
     expect(slotTiming(0, -1)).toBe("future");
-    expect(placementCategory("past")).toBe("done");
-    expect(placementCategory("future")).toBe("active");
   });
 });
 

@@ -15,12 +15,16 @@ import { PlaceForm } from "./place-form";
 type Plan = NonNullable<ChallengePageData["plan"]>;
 type PlanSlotView = Plan["slots"][number];
 
+/** A round that is over while someone is still to finish one of its items. */
+const isOverdue = (slot: PlanSlotView) => slot.entries.some((card) => card.tracking?.overdue);
+
 /** The rounds of a planning list: what was done, what is on now, what is planned or still open. */
 export function PlanPanel({ data }: { data: ChallengePageData }) {
   const plan = data.plan;
   if (!plan) return null;
-  const past = plan.slots.filter((slot) => slot.timing === "past");
-  const ahead = plan.slots.filter((slot) => slot.timing !== "past");
+  // Past rounds fold away, except those still waiting for someone ("Zamanı geçti").
+  const past = plan.slots.filter((slot) => slot.timing === "past" && !isOverdue(slot));
+  const ahead = plan.slots.filter((slot) => slot.timing !== "past" || isOverdue(slot));
   const filledPast = past.filter((slot) => slot.entries.length > 0).length;
 
   return (
@@ -58,7 +62,11 @@ function SlotRow({ slot, data }: { slot: PlanSlotView; data: ChallengePageData }
   const plan = data.plan!;
   const remaining = slot.timing === "current" ? daysLeft(slot.endsOn, data.today) : null;
   const status =
-    slot.timing === "current" ? ["Bu tur", remaining].filter(Boolean).join(" · ") : slot.timing === "past" ? "Geçti" : "Sırada";
+    slot.timing === "current"
+      ? ["Bu tur", remaining].filter(Boolean).join(" · ")
+      : slot.timing === "past"
+        ? isOverdue(slot) ? "Geçti · bitirmeyen var" : "Geçti"
+        : "Sırada";
   const canAdd = plan.canEdit && !slot.isFull;
 
   return (
@@ -103,6 +111,7 @@ export function SuggestionsPanel({ data }: { data: ChallengePageData }) {
   const plan = data.plan;
   if (!plan) return null;
   const { suggestions } = plan;
+  const participantCount = data.participants.filter((participant) => participant.isActive).length;
 
   return (
     <section>
@@ -142,6 +151,7 @@ export function SuggestionsPanel({ data }: { data: ChallengePageData }) {
                           entryId={card.id}
                           options={plan.options}
                           defaultIndex={plan.defaultIndex}
+                          participantCount={participantCount}
                           label={
                             <>
                               <CalendarPlus /> Plana ekle

@@ -1,22 +1,32 @@
 import "server-only";
-import { and, eq, inArray, ne } from "drizzle-orm";
-import { db } from "@/db";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
+import { db, type Executor, type Transaction } from "@/db";
 import { challenges, entries, entryProgress, entryVotes, mediaItems, notes, users, workflowStates } from "@/db/schema";
+import { qualified } from "@/db/sql";
 import { AppError, type BatchResult } from "@/lib/action-state";
+import { fromDayValue } from "@/lib/short-date";
 import { isUuid } from "@/lib/utils";
 import { logActivity } from "@/modules/activity/service";
 import { requireChallengeAccess } from "@/modules/challenges/context";
-import { canAcceptSuggestion, isPlanStateChangeAllowed, placementCategory } from "@/modules/challenges/domain/plan";
+import { canAcceptSuggestion, isPlanStateChangeAllowed } from "@/modules/challenges/domain/plan";
 import { assertRoomInRound, lockSlot, PastLastRoundError, planningRules, RoundFullError } from "@/modules/challenges/planning";
-import { activeParticipants, syncRounds } from "@/modules/challenges/rounds";
+import { activeParticipants, syncRounds, type RoundRow } from "@/modules/challenges/rounds";
 import { getSuggestionState } from "@/modules/challenges/suggestions";
 import { resolveMediaItem, type MediaInput } from "@/modules/media/service";
 import { titleColumns } from "@/modules/media/columns";
 import { formatTitle } from "@/modules/media/titles";
-import { canChangeState, firstStateIn, initialState } from "@/modules/workflows/domain";
+import { canChangeState, firstStateIn, initialState, type StateCategory } from "@/modules/workflows/domain";
 import { getChallengeStates } from "@/modules/workflows/queries";
 import { canDeleteEntry } from "./domain";
 import type { ProgressStatus } from "./labels";
+import {
+  assigneesOf,
+  finishedBy,
+  isSettled,
+  progressOutcome,
+  stateAfterProgress,
+  type FinishedChoice,
+} from "./tracking";
 
 async function loadEntryContext(entryId: string, userId: string) {
   if (!isUuid(entryId)) throw new AppError("Öge bulunamadı.");
@@ -43,6 +53,35 @@ async function loadEntryContext(entryId: string, userId: string) {
   return { entry: { ...entry, title }, ...(await requireChallengeAccess(entry.challengeId, userId)) };
 }
 
+/** Finishing something that went into a round that is already over counts from the round's last day. */
+const finishedOn = (round: RoundRow) => (round.endsOn ? fromDayValue(round.endsOn) : new Date());
+
+/** Marks people as finished, keeping their ratings and any earlier start or finish date. */
+async function markFinished(tx: Transaction, entryId: string, userIds: readonly string[], at: Date): Promise<void> {
+  if (userIds.length === 0) return;
+  await tx
+    .insert(entryProgress)
+    .values(userIds.map((userId) => ({ entryId, userId, status: "completed" as const, startedAt: at, completedAt: at })))
+    .onConflictDoUpdate({
+      target: [entryProgress.entryId, entryProgress.userId],
+      set: {
+        status: "completed",
+        startedAt: sql`coalesce(${qualified(entryProgress.startedAt)}, excluded.started_at)`,
+        completedAt: sql`coalesce(${qualified(entryProgress.completedAt)}, excluded.completed_at)`,
+      },
+    });
+}
+
+/** Looks up the assignees' own progress on an entry. */
+async function assigneeStatuses(executor: Executor, entryId: string, assignees: readonly string[]) {
+  if (assignees.length === 0) return () => null;
+  const rows = await executor
+    .select({ userId: entryProgress.userId, status: entryProgress.status })
+    .from(entryProgress)
+    .where(and(eq(entryProgress.entryId, entryId), inArray(entryProgress.userId, [...assignees])));
+  return (userId: string) => rows.find((row) => row.userId === userId)?.status ?? null;
+}
+
 export type SuggestInput = {
   challengeId: string;
   media: MediaInput;
@@ -50,6 +89,8 @@ export type SuggestInput = {
   pitch: string | null;
   /** Lists with planning: put it into round `roundIndex` ("plan") or leave it as a suggestion. */
   plan?: { mode: "plan" | "suggest"; roundIndex: number | null };
+  /** Who already finished an item planned into a round that is over (default: everyone). */
+  finished?: FinishedChoice;
 };
 
 const acceptsType = (challenge: { mediaTypes: string[] }, mediaType: string) =>
@@ -87,12 +128,24 @@ export async function suggestEntry(userId: string, input: SuggestInput): Promise
     let roundId = options.placement === "round" ? (round?.id ?? null) : null;
     let state = initialState(states, options.initialCategory);
     let slotLabel: string | null = null;
+    let finished: { choice: FinishedChoice; userIds: string[]; at: Date } | null = null;
     if (rules && plannedIndex !== null) {
       const slot = await lockSlot(tx, challenge, plannedIndex);
       await assertRoomInRound(tx, slot.round.id, rules);
       roundId = slot.round.id;
-      state = firstStateIn(states, placementCategory(slot.timing)) ?? initialState(states, "active");
+      state = initialState(states, "active");
       slotLabel = slot.label;
+      // A round that is over doesn't make the item done; whoever finished it does.
+      if (slot.timing === "past") {
+        const choice = input.finished ?? "all";
+        const assignees = assigneesOf(input.recipientId, await activeParticipants(challenge.id, tx));
+        const userIds = finishedBy(choice, assignees, userId);
+        finished = { choice, userIds, at: finishedOn(slot.round) };
+        // A new entry has no other progress yet.
+        if (progressOutcome(assignees, (id) => (userIds.includes(id) ? "completed" : null)) === "done") {
+          state = firstStateIn(states, "done") ?? state;
+        }
+      }
     }
 
     const [entry] = await tx
@@ -109,13 +162,14 @@ export async function suggestEntry(userId: string, input: SuggestInput): Promise
       .returning({ id: entries.id });
 
     if (slotLabel) {
+      if (finished) await markFinished(tx, entry.id, finished.userIds, finished.at);
       await logActivity(tx, {
         groupId: challenge.groupId,
         challengeId: challenge.id,
         entryId: entry.id,
         actorId: userId,
         type: "entry.planned",
-        data: { title: formatTitle(media), round: slotLabel },
+        data: { title: formatTitle(media), round: slotLabel, finished: finished?.choice ?? null },
       });
       return entry.id;
     }
@@ -205,9 +259,10 @@ export async function deleteEntry(userId: string, entryId: string): Promise<stri
 
 /**
  * Planning lists: accepts a suggestion into round `roundIndex`, or moves a planned item there.
- * Items in past rounds count as done, items in the current or a future round as accepted.
+ * Moving never changes whether an item is done. Into a round that is already over, `finished`
+ * says who finished it; the item is done once everyone it is meant for has.
  */
-export async function placeEntry(userId: string, entryId: string, roundIndex: number): Promise<void> {
+export async function placeEntry(userId: string, entryId: string, roundIndex: number, finished: FinishedChoice = "all"): Promise<void> {
   const { entry, challenge, isParticipant, isAdmin } = await loadEntryContext(entryId, userId);
   const rules = planningRules(challenge);
   if (!rules) throw new AppError("Bu listede turlar elle doldurulmuyor.");
@@ -237,8 +292,18 @@ export async function placeEntry(userId: string, entryId: string, roundIndex: nu
     if (slot.round.id === entry.roundId) return;
     await assertRoomInRound(tx, slot.round.id, rules, entry.id);
 
-    const category = placementCategory(slot.timing);
-    const state = entry.category === category ? null : firstStateIn(states, category);
+    let category: StateCategory | null = isSuggestion ? "active" : null;
+    let choice: FinishedChoice | null = null;
+    if (slot.timing === "past" && entry.category !== "done") {
+      const assignees = assigneesOf(entry.suggestedFor, await activeParticipants(challenge.id, tx));
+      const userIds = finishedBy(finished, assignees, userId);
+      if (userIds.length > 0) {
+        choice = finished;
+        await markFinished(tx, entry.id, userIds, finishedOn(slot.round));
+        if (progressOutcome(assignees, await assigneeStatuses(tx, entry.id, assignees)) === "done") category = "done";
+      }
+    }
+    const state = category && category !== entry.category ? firstStateIn(states, category) : undefined;
     await tx
       .update(entries)
       .set({ roundId: slot.round.id, ...(state ? { stateId: state.id, stateChangedAt: new Date() } : {}) })
@@ -249,7 +314,7 @@ export async function placeEntry(userId: string, entryId: string, roundIndex: nu
       entryId: entry.id,
       actorId: userId,
       type: isSuggestion ? "entry.planned" : "entry.moved",
-      data: { title: entry.title, round: slot.label, accepted: isSuggestion },
+      data: { title: entry.title, round: slot.label, accepted: isSuggestion, finished: choice },
     });
   });
 }
@@ -314,11 +379,12 @@ export async function changeEntryState(userId: string, entryId: string, stateId:
   });
 }
 
+/** Saves the user's own status and/or rating; returns the status they had before (null: none). */
 export async function updateProgress(
   userId: string,
   entryId: string,
   patch: { status?: ProgressStatus; rating?: number | null },
-): Promise<void> {
+): Promise<ProgressStatus | null> {
   const { entry, challenge } = await loadEntryContext(entryId, userId);
   const now = new Date();
 
@@ -356,38 +422,37 @@ export async function updateProgress(
     });
   }
 
-  // When everyone the entry was meant for has finished it, the entry itself is done.
-  // (A planning list's suggestion stays a suggestion until someone puts it into a round.)
-  const waitsForPlacement = entry.roundId === null && planningRules(challenge) !== null;
-  if (justCompleted && !waitsForPlacement && (entry.category === "pending" || entry.category === "active")) {
-    const audience = entry.suggestedFor
-      ? [entry.suggestedFor]
-      : (await activeParticipants(challenge.id)).map((participant) => participant.userId);
-    const finished = await db
-      .select({ userId: entryProgress.userId })
-      .from(entryProgress)
-      .where(
-        and(
-          eq(entryProgress.entryId, entry.id),
-          eq(entryProgress.status, "completed"),
-          inArray(entryProgress.userId, audience.length ? audience : [userId]),
-        ),
-      );
-    const doneState = firstStateIn(await getChallengeStates(challenge.id), "done");
-    if (doneState && audience.length > 0 && finished.length >= audience.length) {
-      await db.transaction(async (tx) => {
-        await tx.update(entries).set({ stateId: doneState.id, stateChangedAt: now }).where(eq(entries.id, entry.id));
-        await logActivity(tx, {
-          groupId: challenge.groupId,
-          challengeId: challenge.id,
-          entryId: entry.id,
-          actorId: null,
-          type: "entry.state_changed",
-          data: { title: entry.title, from: entry.stateLabel, to: doneState.label, automatic: true },
-        });
+  const previous = existing?.status ?? null;
+  if (!statusChanged) return previous;
+
+  // The entry is done once everyone it is meant for has finished it, and open again when one of
+  // them takes their "finished" back. (A planning list's suggestion waits for a round first.)
+  const assignees = assigneesOf(entry.suggestedFor, await activeParticipants(challenge.id));
+  const target = stateAfterProgress({
+    category: entry.category,
+    tracked: entry.roundId !== null || planningRules(challenge) === null,
+    outcome: progressOutcome(assignees, await assigneeStatuses(db, entry.id, assignees)),
+    actorIsAssignee: assignees.includes(userId),
+    actorWasSettled: isSettled(previous),
+    actorIsSettled: isSettled(status),
+  });
+  if (!target) return previous;
+  const states = await getChallengeStates(challenge.id);
+  const next = target === "done" ? firstStateIn(states, "done") : initialState(states, "active");
+  if (next && next.id !== entry.stateId) {
+    await db.transaction(async (tx) => {
+      await tx.update(entries).set({ stateId: next.id, stateChangedAt: now }).where(eq(entries.id, entry.id));
+      await logActivity(tx, {
+        groupId: challenge.groupId,
+        challengeId: challenge.id,
+        entryId: entry.id,
+        actorId: null,
+        type: "entry.state_changed",
+        data: { title: entry.title, from: entry.stateLabel, to: next.label, automatic: true, reopened: target === "active" },
       });
-    }
+    });
   }
+  return previous;
 }
 
 export async function addNote(

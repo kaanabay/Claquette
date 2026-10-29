@@ -9,6 +9,10 @@ const STATUS_PHRASES: Record<ProgressStatus, string> = {
   dropped: "ögesini yarım bıraktı",
 };
 
+// Items put into a round that was already over carry who had finished them.
+const FINISHED_SUFFIX: Record<string, string> = { all: " · herkes bitirmişti", me: " · kendisi bitirmişti" };
+const finishedSuffix = (value: unknown) => FINISHED_SUFFIX[String(value)] ?? "";
+
 /** Turkish sentence (without the actor's name) for an activity row. */
 export function describeActivity(type: string, data: Record<string, unknown>, hasActor = true): string {
   const title = quoted(data.title);
@@ -35,6 +39,7 @@ export function describeActivity(type: string, data: Record<string, unknown>, ha
       if (data.pool) return `havuza ${title} ekledi`;
       return typeof data.recipientName === "string" ? `${data.recipientName} için ${title} önerdi` : `gruba ${title} önerdi`;
     case "entry.state_changed":
+      if (data.reopened) return `${title} yeniden «${String(data.to)}» oldu`;
       return data.automatic
         ? `${title} herkes bitirdiği için «${String(data.to)}» oldu`
         : `${title} ögesini «${String(data.to)}» olarak işaretledi`;
@@ -42,11 +47,13 @@ export function describeActivity(type: string, data: Record<string, unknown>, ha
       if (data.method === "manual") return `${title} ögesini bu tura seçti`;
       return hasActor ? `havuzdan ${title} ögesini çekti` : `${title} havuzdan seçildi`;
     case "entry.planned":
-      return data.accepted
-        ? `${title} önerisini kabul edip «${String(data.round)}» turuna ekledi`
-        : `${title} ögesini «${String(data.round)}» turuna ekledi`;
+      return (
+        (data.accepted
+          ? `${title} önerisini kabul edip «${String(data.round)}» turuna ekledi`
+          : `${title} ögesini «${String(data.round)}» turuna ekledi`) + finishedSuffix(data.finished)
+      );
     case "entry.moved":
-      return `${title} ögesini «${String(data.round)}» turuna taşıdı`;
+      return `${title} ögesini «${String(data.round)}» turuna taşıdı${finishedSuffix(data.finished)}`;
     case "entry.unplanned":
       return `${title} ögesini plandan çıkarıp önerilere aldı`;
     case "entry.deleted":

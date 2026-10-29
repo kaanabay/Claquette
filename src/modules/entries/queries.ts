@@ -3,10 +3,12 @@ import { and, asc, count, desc, eq, inArray, or, sql, type SQL } from "drizzle-o
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db";
 import {
+  challengeParticipants,
   challenges,
   entries,
   entryProgress,
   entryVotes,
+  groups,
   mediaItems,
   mediaTypes,
   notes,
@@ -17,6 +19,7 @@ import {
 import { isUuid } from "@/lib/utils";
 import { listEntryActivity } from "@/modules/activity/service";
 import { getChallengeAccess, listParticipants } from "@/modules/challenges/context";
+import { todayIn } from "@/modules/challenges/domain/cadence";
 import { canAcceptSuggestion, isPlanStateChangeAllowed } from "@/modules/challenges/domain/plan";
 import { loadSlotOptions, planningRules, roundLabel } from "@/modules/challenges/planning";
 import { canChangeState, type StateCategory } from "@/modules/workflows/domain";
@@ -24,6 +27,7 @@ import { getChallengeStates } from "@/modules/workflows/queries";
 import { titleColumns } from "@/modules/media/columns";
 import { canDeleteEntry } from "./domain";
 import type { ProgressStatus } from "./labels";
+import { assigneesOf, roundTiming, trackEntry, type Tracking } from "./tracking";
 
 export type EntryCard = {
   id: string;
@@ -55,12 +59,25 @@ export type EntryCard = {
   stats: { avgRating: number | null; ratingCount: number; completedCount: number };
   votes: number;
   votedByMe: boolean;
+  viewerId: string;
+  /** Who it is meant for and how far they are; null when the item isn't tracked (see trackEntry). */
+  tracking: Tracking | null;
+  /** The viewer is one of the people it is meant for, so they can mark it finished from the card. */
+  canMark: boolean;
+};
+
+const todayCache = () => {
+  const byZone = new Map<string, string>();
+  return (timeZone: string) => {
+    if (!byZone.has(timeZone)) byZone.set(timeZone, todayIn(timeZone));
+    return byZone.get(timeZone)!;
+  };
 };
 
 const suggester = alias(users, "suggester");
 const recipient = alias(users, "recipient");
 
-/** Entry cards with the viewer's own progress, group rating stats and pool votes. */
+/** Entry cards with everyone's progress (the viewer's own, rating stats, tracking) and pool votes. */
 export async function loadEntryCards(userId: string, where: SQL | undefined, limit?: number): Promise<EntryCard[]> {
   let query = db
     .select({
@@ -68,10 +85,12 @@ export async function loadEntryCards(userId: string, where: SQL | undefined, lim
       challengeId: entries.challengeId,
       challengeTitle: challenges.title,
       cadenceUnit: challenges.cadenceUnit,
+      timezone: groups.timezone,
       roundId: entries.roundId,
       roundIndex: rounds.index,
       roundStartsOn: rounds.startsOn,
       roundEndsOn: rounds.endsOn,
+      roundClosedAt: rounds.closedAt,
       stateId: workflowStates.id,
       stateLabel: workflowStates.label,
       stateCategory: workflowStates.category,
@@ -92,6 +111,7 @@ export async function loadEntryCards(userId: string, where: SQL | undefined, lim
     })
     .from(entries)
     .innerJoin(challenges, eq(challenges.id, entries.challengeId))
+    .innerJoin(groups, eq(groups.id, challenges.groupId))
     .innerJoin(workflowStates, eq(workflowStates.id, entries.stateId))
     .innerJoin(mediaItems, eq(mediaItems.id, entries.mediaItemId))
     .innerJoin(mediaTypes, eq(mediaTypes.slug, mediaItems.mediaType))
@@ -106,21 +126,18 @@ export async function loadEntryCards(userId: string, where: SQL | undefined, lim
   if (rows.length === 0) return [];
 
   const ids = rows.map((row) => row.id);
-  const [stats, mine, votes] = await Promise.all([
+  const challengeIds = [...new Set(rows.map((row) => row.challengeId))];
+  const [progressRows, participantRows, votes] = await Promise.all([
     db
-      .select({
-        entryId: entryProgress.entryId,
-        avgRating: sql<number | null>`avg(${entryProgress.rating})::float`,
-        ratingCount: count(entryProgress.rating),
-        completedCount: sql<number>`count(*) filter (where ${entryProgress.status} = 'completed')`.mapWith(Number),
-      })
+      .select({ entryId: entryProgress.entryId, userId: entryProgress.userId, status: entryProgress.status, rating: entryProgress.rating })
       .from(entryProgress)
-      .where(inArray(entryProgress.entryId, ids))
-      .groupBy(entryProgress.entryId),
+      .where(inArray(entryProgress.entryId, ids)),
     db
-      .select({ entryId: entryProgress.entryId, status: entryProgress.status, rating: entryProgress.rating })
-      .from(entryProgress)
-      .where(and(inArray(entryProgress.entryId, ids), eq(entryProgress.userId, userId))),
+      .select({ challengeId: challengeParticipants.challengeId, userId: challengeParticipants.userId, name: users.name })
+      .from(challengeParticipants)
+      .innerJoin(users, eq(users.id, challengeParticipants.userId))
+      .where(and(inArray(challengeParticipants.challengeId, challengeIds), eq(challengeParticipants.isActive, true)))
+      .orderBy(asc(challengeParticipants.position)),
     db
       .select({
         entryId: entryVotes.entryId,
@@ -132,14 +149,38 @@ export async function loadEntryCards(userId: string, where: SQL | undefined, lim
       .groupBy(entryVotes.entryId),
   ]);
 
-  const statsById = new Map(stats.map((row) => [row.entryId, row]));
-  const mineById = new Map(mine.map((row) => [row.entryId, row]));
+  type Progress = { status: ProgressStatus; rating: number | null };
+  const progressByEntry = new Map<string, Map<string, Progress>>();
+  for (const { entryId, userId: personId, status, rating } of progressRows) {
+    if (!progressByEntry.has(entryId)) progressByEntry.set(entryId, new Map());
+    progressByEntry.get(entryId)!.set(personId, { status, rating });
+  }
+  const participantsByChallenge = new Map<string, { userId: string; name: string }[]>();
+  for (const { challengeId, ...participant } of participantRows) {
+    participantsByChallenge.set(challengeId, [...(participantsByChallenge.get(challengeId) ?? []), participant]);
+  }
   const votesById = new Map(votes.map((row) => [row.entryId, row]));
+  const today = todayCache();
 
   return rows.map((row) => {
-    const stat = statsById.get(row.id);
-    const own = mineById.get(row.id);
+    const progress = progressByEntry.get(row.id) ?? new Map<string, Progress>();
+    const own = progress.get(userId);
+    const ratings = [...progress.values()].flatMap((entry) => (entry.rating === null ? [] : [entry.rating]));
     const vote = votesById.get(row.id);
+
+    const participants = participantsByChallenge.get(row.challengeId) ?? [];
+    const names = new Map(participants.map((participant) => [participant.userId, participant.name]));
+    if (row.suggestedForId && row.suggestedForName) names.set(row.suggestedForId, row.suggestedForName);
+    const assignees = assigneesOf(row.suggestedForId, participants);
+    const timing =
+      row.roundId && row.roundStartsOn
+        ? roundTiming({ startsOn: row.roundStartsOn, endsOn: row.roundEndsOn, closedAt: row.roundClosedAt }, today(row.timezone))
+        : null;
+    const tracking = trackEntry({
+      category: row.stateCategory,
+      timing,
+      people: assignees.map((id) => ({ id, name: names.get(id) ?? "?", status: progress.get(id)?.status ?? null })),
+    });
     return {
       id: row.id,
       challengeId: row.challengeId,
@@ -175,12 +216,15 @@ export async function loadEntryCards(userId: string, where: SQL | undefined, lim
       createdAt: row.createdAt,
       mine: own ? { status: own.status, rating: own.rating } : null,
       stats: {
-        avgRating: stat?.avgRating ?? null,
-        ratingCount: stat?.ratingCount ?? 0,
-        completedCount: stat?.completedCount ?? 0,
+        avgRating: ratings.length ? ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length : null,
+        ratingCount: ratings.length,
+        completedCount: [...progress.values()].filter((entry) => entry.status === "completed").length,
       },
       votes: vote?.votes ?? 0,
       votedByMe: vote?.votedByMe ?? false,
+      viewerId: userId,
+      tracking,
+      canMark: tracking !== null && assignees.includes(userId),
     };
   });
 }
@@ -214,6 +258,7 @@ export async function getEntryPage(userId: string, entryId: string) {
       roundIndex: rounds.index,
       roundStartsOn: rounds.startsOn,
       roundEndsOn: rounds.endsOn,
+      roundClosedAt: rounds.closedAt,
     })
     .from(entries)
     .innerJoin(mediaItems, eq(mediaItems.id, entries.mediaItemId))
@@ -299,6 +344,9 @@ export async function getEntryPage(userId: string, entryId: string) {
         isSuggestion,
         canAccept,
         canMove,
+        participantCount: activeCount,
+        /** Into a round that is over, ask who finished it (a done item already says). */
+        askFinished: current.category !== "done",
         options: slotOptions,
         defaultIndex:
           (canMove ? row.roundIndex : null) ??
@@ -317,6 +365,19 @@ export async function getEntryPage(userId: string, entryId: string) {
       people.push({ userId: progress.userId, name: progress.name, progress });
     }
   }
+
+  const assignees = assigneesOf(row.suggestedForId, participants.filter((participant) => participant.isActive));
+  const nameOf = (id: string) => people.find((person) => person.userId === id)?.name ?? (id === row.suggestedForId ? row.suggestedForName : null) ?? "?";
+  const tracking = trackEntry({
+    category: current.category,
+    timing: row.roundStartsOn
+      ? roundTiming(
+          { startsOn: row.roundStartsOn, endsOn: row.roundEndsOn, closedAt: row.roundClosedAt },
+          todayIn(access.challenge.timezone),
+        )
+      : null,
+    people: assignees.map((id) => ({ id, name: nameOf(id), status: progressById.get(id)?.status ?? null })),
+  });
 
   return {
     entry: {
@@ -340,6 +401,8 @@ export async function getEntryPage(userId: string, entryId: string) {
     transitions,
     plan,
     people,
+    assignees,
+    tracking,
     mine: progressById.get(userId) ?? null,
     notes: noteRows,
     votes: voteRows.length,

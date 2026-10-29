@@ -1,4 +1,4 @@
-import { ArrowRight, Star, ThumbsUp } from "lucide-react";
+import { ArrowRight, Check, Clock, Star, ThumbsUp } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { formatShortDate } from "@/lib/short-date";
@@ -8,6 +8,8 @@ import { MediaTitle } from "@/modules/media/components/media-title";
 import { formatTitle } from "@/modules/media/titles";
 import { formatRating, progressLabel } from "../labels";
 import type { EntryCard as EntryCardData } from "../queries";
+import { listPeople, type TrackingPerson } from "../tracking";
+import { ProgressToggle } from "./progress-toggle";
 
 export function EntryCard({
   card,
@@ -69,11 +71,62 @@ export function EntryCard({
               <ThumbsUp className="size-3" /> {card.votes}
             </span>
           ) : null}
-          {card.mine ? <Badge tone="violet">{progressLabel(card.mine.status, card.media.mediaType)}</Badge> : null}
+          {/* The finish button below already shows "finished" for the viewer. */}
+          {card.mine && !(card.canMark && card.mine.status === "completed") ? (
+            <Badge tone="violet">{progressLabel(card.mine.status, card.media.mediaType)}</Badge>
+          ) : null}
         </div>
         {card.pitch ? <p className="line-clamp-2 text-sm italic text-muted-foreground">“{card.pitch}”</p> : null}
+        <TrackingRow card={card} />
         {footer}
       </div>
     </article>
+  );
+}
+
+/** Who it is meant for and who finished it, "Zamanı geçti" once its round is over, and the viewer's own button. */
+function TrackingRow({ card }: { card: EntryCardData }) {
+  const { tracking } = card;
+  if (!tracking) return null;
+  // The viewer's own state is the button; the others are shown next to it.
+  const others = card.canMark ? tracking.people.filter((person) => person.id !== card.viewerId) : tracking.people;
+  if (!tracking.overdue && others.length === 0 && !card.canMark) return null;
+  return (
+    <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+      {tracking.overdue ? (
+        <Badge tone="amber" title={`Henüz bitirmeyen: ${listPeople(tracking.waiting, card.viewerId)}`}>
+          <Clock /> Zamanı geçti
+        </Badge>
+      ) : null}
+      {others.map((person) => (
+        <PersonChip key={person.id} person={person} mediaType={card.media.mediaType} />
+      ))}
+      {card.canMark ? (
+        <ProgressToggle
+          entryId={card.id}
+          title={formatTitle(card.media)}
+          mediaType={card.media.mediaType}
+          status={card.mine?.status ?? null}
+          className="ml-auto"
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function PersonChip({ person, mediaType }: { person: TrackingPerson; mediaType: string }) {
+  const firstName = person.name.split(" ")[0];
+  const status = person.status ? progressLabel(person.status, mediaType) : "Başlamadı";
+  const done = person.status === "completed";
+  return (
+    <Badge
+      tone={done ? "emerald" : undefined}
+      title={`${person.name}: ${status}`}
+      className={cn(!done && "font-normal", person.status === "dropped" && "line-through")}
+    >
+      {done ? <Check /> : null}
+      {firstName}
+      <span className="sr-only">: {status}</span>
+    </Badge>
   );
 }

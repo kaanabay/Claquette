@@ -15,6 +15,9 @@ describe("describeActivity", () => {
     expect(describeActivity("entry.state_changed", { title: "Dune", to: "Kabul Edildi" })).toBe(
       "“Dune” ögesini «Kabul Edildi» olarak işaretledi",
     );
+    expect(
+      describeActivity("entry.state_changed", { title: "Dune", to: "Kabul Edildi", automatic: true, reopened: true }, false),
+    ).toBe("“Dune” yeniden «Kabul Edildi» oldu");
   });
 
   it("phrases pool draws by who triggered them", () => {
@@ -33,6 +36,18 @@ describe("describeActivity", () => {
       "“Stalker” ögesini «Aralık 2026» turuna taşıdı",
     );
     expect(describeActivity("entry.unplanned", { title: "Stalker" })).toBe("“Stalker” ögesini plandan çıkarıp önerilere aldı");
+  });
+
+  it("says who had finished an item put into a round that was over", () => {
+    expect(describeActivity("entry.planned", { title: "Persona", round: "Mart 2026", finished: "all" })).toBe(
+      "“Persona” ögesini «Mart 2026» turuna ekledi · herkes bitirmişti",
+    );
+    expect(describeActivity("entry.moved", { title: "Persona", round: "Mart 2026", finished: "me" })).toBe(
+      "“Persona” ögesini «Mart 2026» turuna taşıdı · kendisi bitirmişti",
+    );
+    expect(describeActivity("entry.planned", { title: "Persona", round: "Mart 2026", finished: null })).toBe(
+      "“Persona” ögesini «Mart 2026» turuna ekledi",
+    );
   });
 
   it("names notes added to a board", () => {

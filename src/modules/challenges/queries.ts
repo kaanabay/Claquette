@@ -194,6 +194,7 @@ export async function getSuggestPageData(userId: string, challengeId: string, pa
     defaultIndex: number | null;
     defaultMode: "plan" | "suggest";
     capacity: number | null;
+    participantCount: number;
   } | null = null;
   if (options.allowed && options.placement === "plan" && planning) {
     const choices = await loadSlotOptions(challenge, planning);
@@ -202,6 +203,7 @@ export async function getSuggestPageData(userId: string, challengeId: string, pa
       defaultIndex: defaultSlot(choices, params.round)?.index ?? null,
       defaultMode: params.mode === "suggest" || choices.length === 0 ? "suggest" : "plan",
       capacity: planning.itemsPerRound,
+      participantCount: participants.filter((participant) => participant.isActive).length,
     };
   }
 

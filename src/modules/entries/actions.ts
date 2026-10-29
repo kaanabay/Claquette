@@ -7,7 +7,7 @@ import { type ActionState, type BatchResult, batchState, toActionState, validati
 import { formValues } from "@/lib/forms";
 import { requireUser } from "@/modules/auth/session";
 import { readMediaToAdd } from "@/modules/media/input";
-import { PROGRESS_STATUSES } from "./labels";
+import { PROGRESS_STATUSES, type ProgressStatus } from "./labels";
 import {
   addNote,
   changeEntryState,
@@ -19,6 +19,7 @@ import {
   unplanEntry,
   updateProgress,
 } from "./service";
+import { FINISHED_CHOICES } from "./tracking";
 
 const emptyToNull = (value: string | undefined) => value || null;
 
@@ -32,6 +33,8 @@ const suggestSchema = z.object({
     .union([z.coerce.number().int().min(0), z.literal("")])
     .optional()
     .transform((value) => (typeof value === "number" ? value : null)),
+  // Only sent for a round that is already over.
+  finished: z.enum(FINISHED_CHOICES).optional(),
 });
 
 export async function suggestEntryAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -51,6 +54,7 @@ export async function suggestEntryAction(_prev: ActionState, formData: FormData)
       recipientId: data.recipientId,
       pitch: data.pitch,
       plan: data.planMode ? { mode: data.planMode, roundIndex: data.roundIndex } : undefined,
+      finished: data.finished,
     });
   } catch (error) {
     return toActionState(error);
@@ -108,12 +112,30 @@ const progressSchema = z.object({
 });
 
 export async function updateProgressAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  return entryAction(formData, progressSchema, (userId, input) =>
-    updateProgress(userId, input.entryId, {
+  return entryAction(formData, progressSchema, async (userId, input) => {
+    await updateProgress(userId, input.entryId, {
       status: input.status,
       rating: input.rating === undefined ? undefined : input.rating === 0 ? null : input.rating,
-    }),
-  );
+    });
+  });
+}
+
+/** One-tap "İzledim/Okudum" on a card; the previous status lets the notice offer "Geri al". */
+export async function markProgressAction(
+  entryId: string,
+  status: ProgressStatus,
+): Promise<{ error: string } | { previous: ProgressStatus | null }> {
+  const user = await requireUser();
+  if (!z.uuid().safeParse(entryId).success || !z.enum(PROGRESS_STATUSES).safeParse(status).success) {
+    return { error: "Öge bulunamadı." };
+  }
+  try {
+    const previous = await updateProgress(user.id, entryId, { status });
+    refresh();
+    return { previous };
+  } catch (error) {
+    return { error: toActionState(error)?.error ?? "Durum kaydedilemedi." };
+  }
 }
 
 const noteSchema = z.object({
@@ -141,10 +163,11 @@ export async function toggleVoteAction(_prev: ActionState, formData: FormData): 
 const placeSchema = z.object({
   entryId: z.uuid(),
   roundIndex: z.coerce.number({ error: "Bir tur seç." }).int().min(0, "Bir tur seç."),
+  finished: z.enum(FINISHED_CHOICES).optional(),
 });
 
 export async function placeEntryAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  return entryAction(formData, placeSchema, (userId, input) => placeEntry(userId, input.entryId, input.roundIndex));
+  return entryAction(formData, placeSchema, (userId, input) => placeEntry(userId, input.entryId, input.roundIndex, input.finished));
 }
 
 export async function unplanEntryAction(_prev: ActionState, formData: FormData): Promise<ActionState> {

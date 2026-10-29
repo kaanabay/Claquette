@@ -12,6 +12,7 @@ import { useFormAction } from "@/components/ui/use-form-action";
 import { cn } from "@/lib/utils";
 import { describeSlotOption, type SlotTiming } from "@/modules/challenges/domain/plan";
 import { suggestEntryAction } from "@/modules/entries/actions";
+import { finishedChoices } from "@/modules/entries/labels";
 import { itemKey, type ExistingMedia } from "../keys";
 import { formatTitle } from "../titles";
 import { pickFromCatalog, type CatalogPick, type MediaTypeOption } from "../types";
@@ -30,6 +31,7 @@ type Props = {
     defaultMode: "plan" | "suggest";
     /** Items per round; null = no limit. */
     capacity: number | null;
+    participantCount: number;
   } | null;
   picks?: CatalogPick[];
   preselected?: CatalogPick | null;
@@ -206,11 +208,27 @@ function SuggestFormInner({
                       : `${count} öge «${chosen.label}» turundan başlayarak boş yeri olan turlara sırayla yerleşir.`}
                   </p>
                 ) : null}
-                {chosen?.timing === "past" ? (
-                  <p className="text-xs text-muted-foreground">Geçmiş bir tura eklenen öge doğrudan “Tamamlandı” olur; herkes kendi puanını ekler.</p>
-                ) : null}
                 <FieldError errors={errors.roundIndex} />
               </div>
+            ) : null}
+            {intoPlan && planning && chosen?.timing === "past" ? (
+              <fieldset className="flex flex-col gap-2">
+                <legend className="mb-2 text-sm font-medium">Bu tur geçti. Kim bitirdi?</legend>
+                <div className="flex flex-wrap gap-2">
+                  {finishedChoices(planning.participantCount <= 1).map((choice, index) => (
+                    <label
+                      key={choice.value}
+                      className="flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm has-[:checked]:border-primary has-[:checked]:bg-accent"
+                    >
+                      <input type="radio" name="finished" value={choice.value} defaultChecked={index === 0} className="accent-primary" />
+                      {choice.label}
+                    </label>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Öge, ait olduğu herkes bitirince “Tamamlandı” olur; bitirmeyen varsa “Zamanı geçti” diye görünür.
+                </p>
+              </fieldset>
             ) : null}
             <PitchField intoPlan={intoPlan} errors={errors.pitch} many={count > 1} />
           </CardContent>

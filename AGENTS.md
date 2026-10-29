@@ -39,6 +39,9 @@ Rules that keep this codebase working:
   registered in `STRATEGIES`; new metadata sources implement `MediaProvider` (`src/modules/media/providers`)
   and get their attribution on the About page (`src/app/(app)/about/page.tsx`) and in the footer.
 - The engine reasons about workflow state *categories* (pending/active/done/dropped), never state labels.
+- Completion follows people, not dates (`src/modules/entries/tracking.ts`): an entry is done when everyone it is
+  meant for has finished it, and "overdue" is derived from round dates on every read, never stored. Placing or
+  moving an item never flips its state; a past round asks who finished it.
 - Planning (`planning()` on a strategy, `domain/plan.ts`, `planning.ts`) may create future rounds early.
   Rounds must stay contiguous from index 0 (use `createRoundsThrough`), and the current round is found by
   date (`getCurrentRound`), never as "the latest row".

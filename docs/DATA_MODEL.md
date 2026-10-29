@@ -235,7 +235,7 @@ erDiagram
 | --- | --- |
 | Aralıkta seçilen, 2027'de her çeyrek bir kitap; biri sonra seçilecek | `month × 3`, `starts_on = 2027-01-01`, `ends_on = 2027-12-31` + Birlikte belirliyoruz (tur başına 1). Üç çeyrek dolar, dördüncüsü boş kalır |
 | Ay sonunda birlikte seçilen yönetmen ve filmi; bazen üç ay birden | `month × 1` + Birlikte belirliyoruz. Gelecek aylar önceden doldurulur |
-| 2025'ten beri okuduklarımızı da girelim | `starts_on = 2025-01-01` + Birlikte belirliyoruz; geçmiş turlara eklenenler "Tamamlandı" olur |
+| 2025'ten beri okuduklarımızı da girelim | `starts_on = 2025-01-01` + Birlikte belirliyoruz; geçmiş turlara "Hepimiz bitirdik" diye eklenenler "Tamamlandı" olur |
 | İki kişi her hafta birbirine film öneriyor | `week × 1` + Sırayla öneri (karşılıklı) |
 | Aylık kitap kulübü, her ay sıradaki kişi kitabı seçiyor | `month × 1` + Sırayla öneri (tek seçici) |
 | Film gecesi: herkes aday ekler, oylamayla seçilir | Süresiz + Ortak havuz (oy). Her film gecesi "Sonraki tura geç" |

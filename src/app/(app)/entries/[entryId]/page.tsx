@@ -19,6 +19,7 @@ import {
   VotePanel,
 } from "@/modules/entries/components/entry-panels";
 import { getEntryPage } from "@/modules/entries/queries";
+import { listPeople } from "@/modules/entries/tracking";
 import { MediaCover } from "@/modules/media/components/media-cover";
 import { MediaTitle } from "@/modules/media/components/media-title";
 import { formatTitle, nativeTitle } from "@/modules/media/titles";
@@ -46,7 +47,7 @@ async function Entry({ params }: Pick<PageProps<"/entries/[entryId]">, "params">
   const data = await getEntryPage(user.id, entryId);
   if (!data) notFound();
 
-  const { entry, access, current, transitions, plan, people, mine, notes, votes, votedByMe, activity, canDelete } = data;
+  const { entry, access, current, transitions, plan, people, tracking, mine, notes, votes, votedByMe, activity, canDelete } = data;
   const where = entry.roundLabel
     ? ` · ${entry.roundLabel}`
     : plan?.isSuggestion
@@ -139,7 +140,12 @@ async function Entry({ params }: Pick<PageProps<"/entries/[entryId]">, "params">
                 <blockquote className="border-l-2 border-primary pl-3 text-sm italic text-muted-foreground">“{entry.pitch}”</blockquote>
               ) : null}
               {plan ? <PlanActions entryId={entry.id} roundIndex={entry.roundIndex} plan={plan} dropped={current.category === "dropped"} /> : null}
-              <StateActions entryId={entry.id} current={current} transitions={transitions} />
+              <StateActions
+                entryId={entry.id}
+                current={current}
+                transitions={transitions}
+                waiting={tracking?.overdue ? listPeople(tracking.waiting, user.id) : null}
+              />
               {canDelete ? (
                 <div className="border-t pt-3">
                   <DeleteEntryButton entryId={entry.id} title={formatTitle(media)} />

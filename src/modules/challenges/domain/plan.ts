@@ -122,11 +122,6 @@ export function describeSlotOption(slot: { label: string; timing: SlotTiming; is
   return `${slot.label}${when}${slot.isFull ? " · dolu" : ""}`;
 }
 
-/** Items placed into a past round were already read/watched; others are on the agenda. */
-export function placementCategory(timing: SlotTiming): "active" | "done" {
-  return timing === "past" ? "done" : "active";
-}
-
 /**
  * Plain state changes allowed in a planning list: a suggestion is accepted by placing it into a
  * round (not by marking it accepted), and a planned item leaves its round explicitly.
