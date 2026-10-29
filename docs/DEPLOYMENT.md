@@ -17,7 +17,7 @@ flowchart LR
 | Veritabanı | [Neon Free](https://neon.com/pricing) | Proje başına 0,5 GB depolama ve ~100 CU-saat/ay. En küçük boyutta (0,25 CU) bu yaklaşık 400 saat aktif süre demek. 5 dakika boşta kalınca uyur, ilk istekte saniyenin altında uyanır. |
 | Film/dizi verisi | [TMDB API](https://developer.themoviedb.org/docs/getting-started) | Ticari olmayan kullanım ücretsiz, atıf zorunlu (uygulamanın alt bilgisinde var). |
 | Kitap verisi | Google Books API, Open Library | Google: ücretsiz günlük kota (anahtar önerilir). Open Library anahtarsız. |
-| Kaynak kod | GitHub | Ücretsiz özel (private) repo. |
+| Kaynak kod | GitHub | Ücretsiz; depo açık (public) ya da özel (private) olabilir. |
 
 Birkaç kişilik bir grup bu limitlerin çok altında kalır: binlerce öge birkaç MB tutar.
 
@@ -29,13 +29,13 @@ Birkaç kişilik bir grup bu limitlerin çok altında kalır: binlerce öge birk
 git init
 git add .
 git commit -m "Claquette: ilk sürüm"
-# GitHub'da boş bir (tercihen private) repo oluştur, sonra:
+# GitHub'da boş bir repo oluştur (README, .gitignore ve lisans eklemeden), sonra:
 git remote add origin https://github.com/<kullanici>/claquette.git
 git branch -M main
 git push -u origin main
 ```
 
-`.env.local` `.gitignore`'da; gizli anahtarlar repoya girmez.
+`.env.local` `.gitignore`'da; gizli anahtarlar repoya girmez. Bu yüzden depo açık (public) da olabilir.
 
 ## 2. Neon'da veritabanı oluştur
 
@@ -68,7 +68,9 @@ Anahtarsız da çalışır, ancak Google anahtarsız istekleri IP başına payla
 node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 ```
 
-`REGISTRATION_CODE` için arkadaşlarına söyleyeceğin bir kod seç (ör. `film-gecesi-2026`). Uygulama herkese açık bir adreste olacağı için boş bırakmaman önerilir.
+`REGISTRATION_CODE` için arkadaşlarına söyleyeceğin uzun bir kod seç, ör. 3-4 rastgele kelime. Kayıt formunda deneme
+sınırı yok; kısa ya da bir yerde yazılı duran bir kodu kullanma. Boş bırakırsan adresi bulan herkes hesap açıp API
+kotalarını harcayabilir.
 
 ## 5. Vercel'e deploy et
 
@@ -85,6 +87,9 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
    | `TMDB_API_KEY` | TMDB anahtarı/token'ı |
    | `GOOGLE_BOOKS_API_KEY` | Google anahtarı |
    | `BETTER_AUTH_URL` | *Boş bırakılabilir.* Uygulama Vercel'in üretim adresini kendisi bulur. Kendi alan adını bağlarsan `https://alanadin.com` yaz; paylaşılan listelerin link önizlemeleri de bu adresi kullanır. |
+
+   `.env.local`'ı **Import .env** ile olduğu gibi yükleme: içindeki `DATABASE_URL` ve `BETTER_AUTH_URL` yerel adresleri
+   gösterir. İçe aktaracaksan yalnızca yukarıdaki değerleri içeren ayrı bir dosya hazırla.
 
 4. **Deploy.** Build günlüğünde `[migrate] Database is up to date.` satırını görmelisin. Bu satır tabloları ve başlangıç verisini (medya türleri, varsayılan durum akışı) oluşturur.
 5. Verilen adresi aç (ör. `https://claquette-xxxx.vercel.app`) → **Kayıt ol** (kayıt koduyla) → grup oluştur → **Bağlantıyı kopyala** ile davet linkini arkadaşına gönder.
