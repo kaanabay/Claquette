@@ -40,3 +40,18 @@ export function daysLeft(endsOn: string | null, today: string): string | null {
   if (days < 0) return null;
   return days === 0 ? "son gün" : `${days} gün kaldı`;
 }
+
+/** "yarın başlıyor", "5 gün sonra başlıyor" — null once it has started. */
+export function startsIn(startsOn: string, today: string): string | null {
+  const days = differenceInCalendarDays(parseISO(startsOn), parseISO(today));
+  if (days <= 0) return null;
+  return days === 1 ? "yarın başlıyor" : `${days} gün sonra başlıyor`;
+}
+
+/** "dün bitti", "12 gün önce bitti" (a turn closed by hand may end "bugün") — null while it runs. */
+export function endedAgo(endsOn: string | null, today: string): string | null {
+  if (!endsOn) return null;
+  const days = differenceInCalendarDays(parseISO(today), parseISO(endsOn));
+  if (days < 0) return null;
+  return days === 0 ? "bugün bitti" : days === 1 ? "dün bitti" : `${days} gün önce bitti`;
+}

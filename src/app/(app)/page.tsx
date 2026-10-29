@@ -9,6 +9,7 @@ import { ChallengeCard } from "@/modules/challenges/components/challenge-card";
 import { EntryCard } from "@/modules/entries/components/entry-card";
 import { GroupCard } from "@/modules/groups/components/group-card";
 import { CreateGroupForm, JoinGroupForm } from "@/modules/groups/components/group-forms";
+import { AssignedSection } from "@/modules/home/components/assigned-section";
 import { getHome } from "@/modules/home/queries";
 import { listMediaTypes } from "@/modules/media/service";
 
@@ -22,10 +23,11 @@ export default function HomePage() {
 
 async function Home() {
   const user = await requireUser();
-  const [{ groups, turns, awaitingAnswer, sharedLists, inProgress }, types] = await Promise.all([getHome(user.id), listMediaTypes()]);
+  const [{ groups, turns, awaitingAnswer, sharedLists, assigned }, types] = await Promise.all([getHome(user.id), listMediaTypes()]);
   const typeIcons = Object.fromEntries(types.map((type) => [type.slug, type.icon]));
   const firstName = user.name.split(" ")[0];
   const hasTasks = turns.length + awaitingAnswer.length > 0;
+  const isWaitedFor = assigned !== null && assigned.overdue.length + assigned.current.length > 0;
 
   return (
     <div className="flex flex-col gap-10">
@@ -34,13 +36,17 @@ async function Home() {
         <p className="mt-1 text-muted-foreground">
           {hasTasks
             ? "Senden bir cevap bekleyenler var."
-            : sharedLists.length
+            : isWaitedFor
+              ? "Sırada seni bekleyenler var."
+              : sharedLists.length
               ? "Ortak listelerinde şu an bunlar var."
               : groups.length
                 ? "Bir gruba girip ilk ortak listeyi oluşturabilirsin."
                 : "Başlamak için bir grup oluştur ya da davet koduyla katıl."}
         </p>
       </div>
+
+      {assigned ? <AssignedSection assigned={assigned} /> : null}
 
       {turns.length > 0 ? (
         <section>
@@ -86,17 +92,6 @@ async function Home() {
           <div className="grid gap-3 md:grid-cols-2">
             {sharedLists.map((summary) => (
               <ChallengeCard key={summary.id} summary={summary} typeIcons={typeIcons} showGroup />
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {inProgress.length > 0 ? (
-        <section>
-          <SectionTitle>Devam edenler</SectionTitle>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {inProgress.map((card) => (
-              <EntryCard key={card.id} card={card} showChallenge />
             ))}
           </div>
         </section>

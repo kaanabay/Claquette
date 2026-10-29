@@ -25,7 +25,7 @@ Başlangıçta iki kişi için tasarlandı; grup, katılımcı, liste kuralı ve
 - **Notlar:** Grupla paylaşılan ya da sadece sana görünen notlar, spoiler gizleme.
 - **Otomatik veri + elle ekleme:** TMDB (film/dizi; Türkçe ve İngilizce adla arama, "Stalker 1979" gibi yıl filtresi), Google Books ve Open Library (kitap), Apple Podcasts (podcast). Bulunamayan ya da kaynağı olmayan içerik (oyun, bağımsız yapımlar…) için elle ekleme her zaman açık.
 - **Şeffaflık:** "Hakkında" sayfası (`/about`, oturumsuz açılır) tüm veri kaynaklarını ve atıflarını, kullanılan açık kaynak bileşenleri ve verilerin nereye gittiğini anlatıyor; alt bilgi her sayfadan buraya bağlanıyor.
-- **Ana sayfa:** ortak listelerinde şu an ne olduğu (bu turun ögeleri, kalan süre, sıradaki turlar), cevap bekleyen öneriler, sıranın sende olduğu listeler. Grup sayfasında olay akışı.
+- **Ana sayfa:** en üstte "Bana atananlar": sana ait olup henüz bitirmediklerin; zamanı geçenler, devam edenler ve her listenin sıradaki turu, karttan tek dokunuşla işaretlenir. Altında ortak listelerinde şu an ne olduğu (bu turun ögeleri, kalan süre, sıradaki turlar), cevap bekleyen öneriler, sıranın sende olduğu listeler. Grup sayfasında olay akışı.
 - Mobil uyumlu, açık/koyu tema, Türkçe arayüz.
 
 ## Teknolojiler

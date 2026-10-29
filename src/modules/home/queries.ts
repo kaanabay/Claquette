@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq, getTableColumns, inArray, isNull, ne, or, sql } from "drizzle-orm";
+import { and, eq, getTableColumns, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { challengeParticipants, challenges, entries, entryProgress, groups, workflowStates } from "@/db/schema";
 import { qualified } from "@/db/sql";
@@ -9,9 +9,10 @@ import { planningRules } from "@/modules/challenges/planning";
 import { syncRounds } from "@/modules/challenges/rounds";
 import { getSuggestionState } from "@/modules/challenges/suggestions";
 import { loadSharedListSummaries } from "@/modules/challenges/summaries";
-import { daysLeft } from "@/modules/challenges/timeline";
-import { loadEntryCards } from "@/modules/entries/queries";
+import { daysLeft, endedAgo, startsIn } from "@/modules/challenges/timeline";
+import { loadEntryCards, type EntryCard } from "@/modules/entries/queries";
 import { listMyGroups } from "@/modules/groups/queries";
+import { groupAssigned } from "./assigned";
 
 export type TurnTask = {
   challengeId: string;
@@ -63,14 +64,13 @@ export async function getHome(userId: string) {
   }
 
   const sharedLists = await loadSharedListSummaries(userId, myChallenges);
-  const onCards = new Set(sharedLists.flatMap((summary) => summary.current?.items.map((item) => item.entryId) ?? []));
 
   const groupIds = groupList.map((group) => group.id);
   const inMyGroups = groupIds.length ? inArray(challenges.groupId, groupIds) : sql`false`;
   const myChallengeIds = myChallenges.map((challenge) => challenge.id);
   const planningIds = myChallenges.filter((challenge) => planningRules(challenge)).map((challenge) => challenge.id);
 
-  const [awaitingAnswer, inProgress] = await Promise.all([
+  const [awaitingAnswer, assignedCards] = await Promise.all([
     loadEntryCards(
       userId,
       and(
@@ -88,12 +88,14 @@ export async function getHome(userId: string) {
       ),
       12,
     ),
+    // Items in a round that are meant for the user and not finished by them ("Bana atananlar").
     loadEntryCards(
       userId,
       and(
         inMyGroups,
         eq(challenges.status, "active"),
         eq(workflowStates.category, "active"),
+        isNotNull(entries.roundId),
         or(
           eq(entries.suggestedFor, userId),
           // group-wide entries of challenges the user takes part in
@@ -104,20 +106,31 @@ export async function getHome(userId: string) {
           where ep.entry_id = ${qualified(entries.id)} and ep.user_id = ${userId} and ep.status in ('completed', 'dropped')
         )`,
       ),
-      24,
+      200,
     ),
   ]);
 
-  // Items of the current rounds are already on the list cards; planned ones haven't started yet.
   const timezones = new Map(myChallenges.map((challenge) => [challenge.id, challenge.timezone]));
-  const started = (card: (typeof inProgress)[number]) =>
-    !card.roundStartsOn || card.roundStartsOn <= todayIn(timezones.get(card.challengeId) ?? "Europe/Istanbul");
+  const todayOf = (card: EntryCard) => todayIn(timezones.get(card.challengeId) ?? "Europe/Istanbul");
+  const byTime = groupAssigned(assignedCards);
 
   return {
     groups: groupList,
     turns,
     awaitingAnswer,
     sharedLists,
-    inProgress: inProgress.filter((card) => !onCards.has(card.id) && started(card)).slice(0, 12),
+    /** Only for people taking part in a shared list. */
+    assigned: myChallenges.length
+      ? {
+          overdue: byTime.overdue.map((card) => ({ card, note: endedAgo(card.roundEndsOn, todayOf(card)) })),
+          current: byTime.current.map((card) => ({ card, note: daysLeft(card.roundEndsOn, todayOf(card)) })),
+          upcoming: byTime.upcoming.map((card) => ({
+            card,
+            note: card.roundStartsOn ? startsIn(card.roundStartsOn, todayOf(card)) : null,
+          })),
+        }
+      : null,
   };
 }
+
+export type AssignedItems = NonNullable<Awaited<ReturnType<typeof getHome>>["assigned"]>;

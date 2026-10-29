@@ -17,6 +17,7 @@ export function EntryCard({
   showState = true,
   showRound = true,
   byline = "recipient",
+  roundNote,
   footer,
   className,
 }: {
@@ -26,6 +27,8 @@ export function EntryCard({
   showRound?: boolean;
   /** "recipient": "Kaan → Ayşe"; in planning lists items are simply "added" or "suggested". */
   byline?: "recipient" | "added" | "suggested";
+  /** Shown after the round: "3 gün kaldı", "dün bitti". */
+  roundNote?: string | null;
   footer?: React.ReactNode;
   className?: string;
 }) {
@@ -47,6 +50,7 @@ export function EntryCard({
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
           {showChallenge ? <span className="font-medium text-foreground/80">{card.challengeTitle}</span> : null}
           {showRound && card.roundLabel ? <Badge>{card.roundLabel}</Badge> : null}
+          {roundNote ? <span className="font-medium text-foreground/80">{roundNote}</span> : null}
           {card.suggestedBy ? (
             byline === "recipient" ? (
               <span className="flex items-center gap-1">

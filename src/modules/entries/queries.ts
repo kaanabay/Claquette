@@ -39,6 +39,8 @@ export type EntryCard = {
   roundLabel: string | null;
   /** First day of the item's round (planned rounds may lie in the future). */
   roundStartsOn: string | null;
+  /** Last day of the item's round; null for an indefinite list's open turn. */
+  roundEndsOn: string | null;
   state: { id: string; label: string; category: StateCategory; color: string; position: number };
   media: {
     title: string;
@@ -192,6 +194,7 @@ export async function loadEntryCards(userId: string, where: SQL | undefined, lim
           ? roundLabel(row, { index: row.roundIndex, startsOn: row.roundStartsOn, endsOn: row.roundEndsOn })
           : null,
       roundStartsOn: row.roundStartsOn,
+      roundEndsOn: row.roundEndsOn,
       state: {
         id: row.stateId,
         label: row.stateLabel,
