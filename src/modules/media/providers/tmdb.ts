@@ -1,5 +1,16 @@
 import { isLatinText } from "../titles";
-import { fetchJson, TTL, yearOf, type MediaDetails, type MediaProvider, type MediaSearchResult, type SeasonOption } from "./types";
+import { matchesPerson } from "./matching";
+import {
+  fetchJson,
+  TTL,
+  yearOf,
+  type MediaDetails,
+  type MediaProvider,
+  type MediaSearchResult,
+  type PersonKind,
+  type PersonResult,
+  type SeasonOption,
+} from "./types";
 
 // The Movie Database: free for non-commercial use with attribution (see the app footer).
 const API = "https://api.themoviedb.org/3";
@@ -37,6 +48,38 @@ type Details = SearchItem & {
 };
 
 type SeasonDetails = SeasonSummary & { overview?: string; episodes?: unknown[] };
+
+type PersonItem = {
+  id: number;
+  name: string;
+  popularity?: number;
+  known_for_department?: string;
+  profile_path?: string | null;
+  known_for?: SearchItem[];
+};
+type Credit = SearchItem & { job?: string; department?: string };
+type Credits = { cast?: Credit[]; crew?: Credit[] };
+
+const KINDS: Record<string, PersonKind> = { Directing: "director", Writing: "writer", Acting: "actor" };
+
+/**
+ * A person's films or series for what they are known for (a director's directing, an actor's
+ * roles), oldest first: the filmography to pick a month's film from.
+ */
+export function creditsFor(kind: PersonKind, credits: Credits): Credit[] {
+  const crew = credits.crew ?? [];
+  const chosen =
+    kind === "actor"
+      ? (credits.cast ?? [])
+      : kind === "director"
+        ? crew.filter((credit) => credit.job === "Director" || credit.job === "Creator")
+        : kind === "writer"
+          ? crew.filter((credit) => credit.department === "Writing")
+          : [...crew, ...(credits.cast ?? [])];
+  const unique = [...new Map(chosen.map((credit) => [credit.id, credit])).values()];
+  const dateOf = (credit: Credit) => credit.release_date || credit.first_air_date || "9999";
+  return unique.sort((a, b) => dateOf(a).localeCompare(dateOf(b)));
+}
 
 /** "movie:1398", "tv:4607", or a season of a series: "tv:4607:s2". */
 export function parseTmdbId(externalId: string): { kind: Kind; id: string; season: number | null } | null {
@@ -101,6 +144,23 @@ export function mergeSearchResults<T extends { id: number; popularity?: number }
     .map((entry) => entry.item);
 }
 
+function toResult(kind: Kind, item: SearchItem, englishTitles: ReadonlyMap<number, string | undefined>): MediaSearchResult {
+  const originalTitle = item.original_title ?? item.original_name ?? null;
+  return {
+    provider: "tmdb",
+    providerLabel: "TMDB",
+    externalId: `${kind}:${item.id}`,
+    mediaType: kind,
+    title: item.title ?? item.name ?? "İsimsiz",
+    originalTitle,
+    internationalTitle: internationalTitleOf(originalTitle, englishTitles.get(item.id)),
+    year: yearOf(item.release_date ?? item.first_air_date),
+    creators: [],
+    imageUrl: poster(item.poster_path, "w185"),
+    hasSeasons: kind === "tv",
+  };
+}
+
 export const tmdbProvider: MediaProvider = {
   id: "tmdb",
   label: "TMDB",
@@ -124,23 +184,49 @@ export const tmdbProvider: MediaProvider = {
     const { title, year } = splitTitleYear(query);
     let found = year ? await find(title, year) : null;
     if (!found || found.items.length === 0) found = await find(query.trim(), null);
-    const { englishTitles } = found;
-    return found.items.map((item): MediaSearchResult => {
-      const originalTitle = item.original_title ?? item.original_name ?? null;
-      return {
-        provider: "tmdb",
-        providerLabel: "TMDB",
-        externalId: `${kind}:${item.id}`,
-        mediaType: kind,
-        title: item.title ?? item.name ?? "İsimsiz",
-        originalTitle,
-        internationalTitle: internationalTitleOf(originalTitle, englishTitles.get(item.id)),
-        year: yearOf(item.release_date ?? item.first_air_date),
-        creators: [],
-        imageUrl: poster(item.poster_path, "w185"),
-        hasSeasons: kind === "tv",
-      };
-    });
+    return found.items.map((item) => toResult(kind, item, found.englishTitles));
+  },
+
+  // Names in English (in Turkish they come back in their own script: "Андрей Тарковский"), the
+  // titles they are known for in Turkish. The best known of the matching people first.
+  async searchPeople(query) {
+    const [english, turkish] = await Promise.all(
+      (["en-US", "tr-TR"] as const).map((language) =>
+        request<{ results: PersonItem[] }>("/search/person", { query, include_adult: "false", language }, TTL.search),
+      ),
+    );
+    const knownFor = new Map(turkish.results.map((person) => [person.id, person.known_for ?? []]));
+    return english.results
+      .filter((person) => matchesPerson(query, [person.name]))
+      .sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0))
+      .slice(0, 2)
+      .map(
+        (person): PersonResult => ({
+          provider: "tmdb",
+          id: String(person.id),
+          name: person.name,
+          kind: KINDS[person.known_for_department ?? ""] ?? "person",
+          detail:
+            (knownFor.get(person.id) ?? person.known_for ?? [])
+              .map((work) => work.title ?? work.name)
+              .filter(Boolean)
+              .slice(0, 3)
+              .join(", ") || null,
+          imageUrl: poster(person.profile_path, "w185"),
+        }),
+      );
+  },
+
+  async worksBy(person, mediaType) {
+    if (person.provider !== "tmdb" || !/^\d+$/.test(person.id)) return [];
+    const kind = kindOf(mediaType);
+    const [turkish, english] = await Promise.all(
+      (["tr-TR", "en-US"] as const).map((language) => request<Credits>(`/person/${person.id}/${kind}_credits`, { language }, TTL.details)),
+    );
+    const englishTitles = new Map([...(english.cast ?? []), ...(english.crew ?? [])].map((credit) => [credit.id, credit.title ?? credit.name]));
+    return creditsFor(person.kind, turkish)
+      .slice(0, 60)
+      .map((credit) => toResult(kind, credit, englishTitles));
   },
 
   async getSeasons(externalId) {

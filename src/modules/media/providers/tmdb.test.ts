@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { internationalTitleOf, mergeSearchResults, parseTmdbId, splitTitleYear } from "./tmdb";
+import { creditsFor, internationalTitleOf, mergeSearchResults, parseTmdbId, splitTitleYear } from "./tmdb";
 
 describe("splitTitleYear", () => {
   it("reads a trailing year as a filter", () => {
@@ -57,5 +57,26 @@ describe("internationalTitleOf", () => {
     expect(internationalTitleOf("Сталкер", "Сталкер")).toBeNull();
     expect(internationalTitleOf("Сталкер", undefined)).toBeNull();
     expect(internationalTitleOf(null, "Stalker")).toBeNull();
+  });
+});
+
+describe("creditsFor", () => {
+  const credits = {
+    cast: [{ id: 9, title: "Cameo", release_date: "1970-01-01" }],
+    crew: [
+      { id: 2, title: "Stalker", release_date: "1979-05-25", job: "Director", department: "Directing" },
+      { id: 1, title: "Ivan's Childhood", release_date: "1962-04-06", job: "Director", department: "Directing" },
+      { id: 2, title: "Stalker", release_date: "1979-05-25", job: "Writer", department: "Writing" },
+      { id: 3, title: "Andrei Rublev", release_date: "1966-12-16", job: "Screenplay", department: "Writing" },
+    ],
+  };
+
+  it("lists a director's films once each, oldest first", () => {
+    expect(creditsFor("director", credits).map((credit) => credit.title)).toEqual(["Ivan's Childhood", "Stalker"]);
+  });
+
+  it("lists what someone wrote, or played in", () => {
+    expect(creditsFor("writer", credits).map((credit) => credit.id)).toEqual([3, 2]);
+    expect(creditsFor("actor", credits).map((credit) => credit.id)).toEqual([9]);
   });
 });

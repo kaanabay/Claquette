@@ -11,15 +11,38 @@ import { useFieldId } from "@/components/ui/use-field-id";
 import { cn } from "@/lib/utils";
 import { externalKey, titleKey, type ExistingMedia } from "../keys";
 import { allTitles, formatTitle, nativeTitle } from "../titles";
-import type { MediaSearchResult, SeasonOption } from "../providers/types";
+import type { MediaSearchResult, PersonResult, SeasonOption } from "../providers/types";
 import { MAX_BATCH, pickFromCatalog, type CatalogPick, type MediaTypeOption, type PickedItem } from "../types";
 import { MediaCover } from "./media-cover";
 
 type Mode = "search" | "picks" | "manual";
 /** `key`: the type and query the results belong to, so a new query never shows the old answer. */
-type SearchState = { key: string; loading: boolean; results: MediaSearchResult[]; failed: string[]; error?: string };
+type SearchState = {
+  key: string;
+  loading: boolean;
+  results: MediaSearchResult[];
+  failed: string[];
+  /** Directors, actors, authors whose name answers the query: their works open under them. */
+  people: PersonResult[];
+  error?: string;
+};
 
-const NO_SEARCH: SearchState = { key: "", loading: false, results: [], failed: [] };
+const NO_SEARCH: SearchState = { key: "", loading: false, results: [], failed: [], people: [] };
+
+const PERSON_KINDS: Record<PersonResult["kind"], string> = {
+  director: "Yönetmen",
+  writer: "Senarist",
+  actor: "Oyuncu",
+  author: "Yazar",
+  person: "Kişi",
+};
+const WORKS_LABELS: Record<string, string> = { movie: "Filmleri", tv: "Dizileri", book: "Kitapları" };
+
+/** "1979 · İz Sürücü · Andrei Tarkovsky · 3 baskı" under a result. */
+const resultMeta = (result: MediaSearchResult) =>
+  [result.year, nativeTitle(result), result.creators.slice(0, 2).join(", "), result.editions && result.editions > 1 ? `${result.editions} baskı` : null]
+    .filter(Boolean)
+    .join(" · ");
 
 const NO_EXISTING: ExistingMedia = { keys: [], titles: [], links: {} };
 
@@ -54,6 +77,7 @@ function pickFromSeason(series: MediaSearchResult, season: SeasonOption, icon: s
 }
 
 type SeasonsState = SeasonOption[] | "loading" | "error";
+type WorksState = MediaSearchResult[] | "loading" | "error";
 
 /**
  * The picker's basket, owned by the form around it. Whatever the list turns out to hold (the
@@ -117,6 +141,9 @@ export function MediaPicker({
   // Seasons of series results, fetched when first opened.
   const [seasons, setSeasons] = useState<Record<string, SeasonsState>>({});
   const [openSeries, setOpenSeries] = useState<string | null>(null);
+  // A person's works, fetched when first opened.
+  const [works, setWorks] = useState<Record<string, WorksState>>({});
+  const [openPerson, setOpenPerson] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
   // The manual form starts from what was searched for, and empty again once it was added.
   const [manualSeed, setManualSeed] = useState("");
@@ -158,8 +185,8 @@ export function MediaPicker({
           signal: controller.signal,
         });
         if (!response.ok) throw new Error(String(response.status));
-        const data = (await response.json()) as { results: MediaSearchResult[]; failed: string[] };
-        setSearch({ key, loading: false, results: data.results, failed: data.failed });
+        const data = (await response.json()) as { results: MediaSearchResult[]; failed: string[]; people?: PersonResult[] };
+        setSearch({ key, loading: false, results: data.results, failed: data.failed, people: data.people ?? [] });
       } catch (error) {
         if (!controller.signal.aborted) {
           setSearch({ ...NO_SEARCH, key, error: "Arama şu an yapılamadı. Elle ekleyebilirsin." });
@@ -223,6 +250,26 @@ export function MediaPicker({
     } catch (error) {
       console.warn(error);
       setSeasons((current) => ({ ...current, [key]: "error" }));
+    }
+  }
+
+  async function toggleWorks(person: PersonResult, key: string) {
+    if (openPerson === key) {
+      setOpenPerson(null);
+      return;
+    }
+    setOpenPerson(key);
+    if (Array.isArray(works[key])) return;
+    setWorks((current) => ({ ...current, [key]: "loading" }));
+    try {
+      const params = new URLSearchParams({ type: typeSlug, provider: person.provider, id: person.id, name: person.name, kind: person.kind });
+      const response = await fetch(`/api/media/works?${params}`);
+      if (!response.ok) throw new Error(String(response.status));
+      const data = (await response.json()) as { results: MediaSearchResult[] };
+      setWorks((current) => ({ ...current, [key]: data.results }));
+    } catch (error) {
+      console.warn(error);
+      setWorks((current) => ({ ...current, [key]: "error" }));
     }
   }
 
@@ -367,6 +414,23 @@ export function MediaPicker({
                 </p>
               ) : null}
               <ul ref={listRef} onKeyDown={(event) => onResultsKeyDown(event, searchRef.current)} className="flex max-h-96 flex-col gap-1 overflow-y-auto">
+                {search.people.map((person) => {
+                  const key = `person:${person.provider}:${person.id}`;
+                  const open = openPerson === key;
+                  const state = works[key];
+                  return (
+                    <Fragment key={key}>
+                      <PersonRow person={person} label={WORKS_LABELS[typeSlug] ?? "Eserleri"} open={open} onToggle={() => toggleWorks(person, key)} />
+                      {open && Array.isArray(state)
+                        ? state.length > 0
+                          ? state.map((work) => row(pickFromResult(work, type.icon), resultMeta(work), work.providerLabel, { indent: true }))
+                          : <li className="py-1 pl-14 text-xs text-muted-foreground">Eser bulunamadı.</li>
+                        : null}
+                      {open && state === "loading" ? <li className="py-1 pl-14 text-xs text-muted-foreground">Yükleniyor…</li> : null}
+                      {open && state === "error" ? <li className="py-1 pl-14 text-xs text-destructive">Şu an alınamadı.</li> : null}
+                    </Fragment>
+                  );
+                })}
                 {found.map(({ result, item }) => {
                   const open = openSeries === item.key;
                   const state = seasons[item.key];
@@ -374,7 +438,7 @@ export function MediaPicker({
                     <Fragment key={item.key}>
                       {row(
                         item,
-                        [result.year, nativeTitle(result), result.creators.slice(0, 2).join(", ")].filter(Boolean).join(" · "),
+                        resultMeta(result),
                         result.providerLabel,
                         result.hasSeasons ? { seasons: { open, onToggle: () => toggleSeasons(result, item.key) } } : {},
                       )}
@@ -478,6 +542,31 @@ export function MediaPicker({
 }
 
 type SeasonsToggle = { open: boolean; onToggle: () => void };
+
+/** A director, actor or author matching the search; opens their works below. */
+function PersonRow({ person, label, open, onToggle }: { person: PersonResult; label: string; open: boolean; onToggle: () => void }) {
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="flex w-full items-center gap-3 rounded-lg p-2 text-left transition-colors hover:bg-muted"
+      >
+        <MediaCover src={person.imageUrl} title={person.name} icon="👤" className="w-10" />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate font-medium">{person.name}</span>
+          <span className="block truncate text-xs text-muted-foreground">
+            {[PERSON_KINDS[person.kind], person.detail].filter(Boolean).join(" · ")}
+          </span>
+        </span>
+        <span className="flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground">
+          {label} <ChevronDown className={cn("size-3.5 transition-transform", open && "rotate-180")} />
+        </span>
+      </button>
+    </li>
+  );
+}
 
 function ResultRow({
   item,

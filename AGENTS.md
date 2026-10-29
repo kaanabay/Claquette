@@ -39,8 +39,8 @@ Rules that keep this codebase working:
 - In `sql` templates, outer columns of correlated subqueries must use `qualified(column)` from `src/db/sql.ts`
   (Drizzle renders columns unqualified in single-table queries). Prefer grouped queries merged in code.
 - New suggestion rules implement `ChallengeStrategy` (`src/modules/challenges/domain/strategies`) and are
-  registered in `STRATEGIES`; new metadata sources implement `MediaProvider` (`src/modules/media/providers`)
-  and get their attribution on the About page (`src/app/(app)/about/page.tsx`) and in the footer.
+  registered in `STRATEGIES`; new metadata sources implement `MediaProvider` (`src/modules/media/providers`; people and their
+  works through the optional `searchPeople` / `worksBy`) and get their attribution on the About page (`src/app/(app)/about/page.tsx`) and in the footer.
 - The engine reasons about workflow state *categories* (pending/active/done/dropped), never state labels.
 - Completion follows people, not dates (`src/modules/entries/tracking.ts`): an entry is done when everyone it is
   meant for has finished it, and "overdue" is derived from round dates on every read, never stored. Placing or
