@@ -47,6 +47,30 @@ export async function signUpAction(_prev: ActionState, formData: FormData): Prom
   redirect(safeRedirectPath(next));
 }
 
+const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, "Mevcut şifreni yaz."),
+    newPassword: z.string().min(8, "Şifre en az 8 karakter olmalı.").max(128),
+    repeatPassword: z.string(),
+  })
+  .refine((data) => data.newPassword === data.repeatPassword, { path: ["repeatPassword"], message: "Şifreler aynı değil." });
+
+/** Changing one's own password (also how a temporary one from the site admin gets replaced). */
+export async function changePasswordAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const parsed = changePasswordSchema.safeParse(formValues(formData));
+  if (!parsed.success) return validationError(parsed.error);
+  try {
+    await getAuth().api.changePassword({
+      body: { currentPassword: parsed.data.currentPassword, newPassword: parsed.data.newPassword, revokeOtherSessions: true },
+      headers: await headers(),
+    });
+  } catch (error) {
+    if (isAPIError(error)) return { error: authErrorMessage({ code: error.body?.code, status: error.statusCode }) };
+    throw error;
+  }
+  return { success: "Şifren değişti. Diğer cihazlardaki oturumların kapandı." };
+}
+
 export async function signOutAction(): Promise<void> {
   await getAuth().api.signOut({ headers: await headers() });
   redirect("/sign-in");

@@ -17,6 +17,7 @@ import {
   selectPoolEntry,
   setChallengeStatus,
 } from "./service";
+import { updateChallengeSettings } from "./settings";
 
 const optionalText = (max: number) =>
   z
@@ -102,6 +103,79 @@ export async function createChallengeAction(_prev: ActionState, formData: FormDa
     return toActionState(error);
   }
   redirect(`/challenges/${challengeId}`);
+}
+
+const updateChallengeSchema = z.object({
+  challengeId: z.uuid(),
+  title: z.string().trim().min(1, "Listeye bir başlık ver.").max(80, "En fazla 80 karakter."),
+  description: optionalText(500),
+  // Timing, rule and workflow are only sent while they can still change (the list is empty).
+  cadencePreset: z.enum(["custom", ...CADENCE_PRESETS.map((preset) => preset.key)]).optional(),
+  cadenceUnit: z.enum(CADENCE_UNITS).optional(),
+  cadenceInterval: z.coerce.number().int().min(1, "En az 1.").max(365, "En fazla 365.").optional(),
+  startsOn: z.iso.date("Geçerli bir başlangıç tarihi seç.").optional(),
+  endsOn: z
+    .union([z.iso.date("Geçerli bir tarih seç."), z.literal("")])
+    .optional()
+    .transform((value) => value || null),
+  strategy: z.enum(STRATEGY_KEYS, "Bir öneri kuralı seç."),
+  workflowId: z
+    .union([z.uuid(), z.literal("")])
+    .optional()
+    .transform((value) => value || null),
+  confirmToken: z.string().max(64).optional(),
+});
+
+export async function updateChallengeAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireUser();
+  const parsed = updateChallengeSchema.safeParse(formValues(formData));
+  if (!parsed.success) return validationError(parsed.error);
+  const data = parsed.data;
+
+  const preset = CADENCE_PRESETS.find((p) => p.key === data.cadencePreset);
+  const cadence = data.cadencePreset
+    ? preset
+      ? { unit: preset.unit, interval: preset.interval }
+      : { unit: data.cadenceUnit ?? "week", interval: data.cadenceInterval ?? 1 }
+    : undefined;
+
+  const strategy = getStrategy(data.strategy);
+  const config = strategy.configSchema.safeParse(readConfigFromForm(strategy, formData));
+  if (!config.success) {
+    const fieldErrors: Record<string, string[]> = {};
+    for (const issue of config.error.issues) {
+      fieldErrors[configFieldName(strategy.key, String(issue.path[0]))] = [issue.message];
+    }
+    return { error: "Kural ayarlarını kontrol et.", fieldErrors };
+  }
+
+  let outcome: Awaited<ReturnType<typeof updateChallengeSettings>>;
+  try {
+    outcome = await updateChallengeSettings(
+      user.id,
+      data.challengeId,
+      {
+        title: data.title,
+        description: data.description,
+        mediaTypes: formList(formData, "mediaTypes"),
+        endsOn: data.endsOn,
+        participants: formList(formData, "participants"),
+        cadence,
+        startsOn: data.startsOn,
+        strategy: strategy.key,
+        strategyConfig: config.data,
+        workflowId: data.workflowId,
+      },
+      data.confirmToken ?? null,
+    );
+  } catch (error) {
+    return toActionState(error);
+  }
+  if (outcome.status === "confirm") {
+    return { confirm: { token: outcome.token, changes: outcome.changes.map(({ level, message }) => ({ level, message })) } };
+  }
+  if (outcome.status === "unchanged") return { success: "Kaydedilecek bir değişiklik yok." };
+  redirect(`/challenges/${data.challengeId}?saved=${Date.now()}`);
 }
 
 const challengeIdSchema = z.object({ challengeId: z.uuid() });

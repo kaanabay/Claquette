@@ -6,7 +6,8 @@ import { isUuid } from "@/lib/utils";
 import { listGroupActivity } from "@/modules/activity/service";
 import { syncRounds } from "@/modules/challenges/rounds";
 import { loadSharedListSummaries } from "@/modules/challenges/summaries";
-import { getMembership, isAdminRole } from "./service";
+import { canManageMember } from "./domain";
+import { findMembership, getMembership, isAdminRole } from "./service";
 
 // Counts are fetched with grouped queries and merged in code. (Correlated subqueries inside
 // sql`` are fragile: in single-table selects Drizzle renders columns unqualified, so an outer
@@ -81,6 +82,8 @@ export async function getGroupPage(userId: string, groupId: string) {
     group,
     role: membership.role,
     isAdmin: isAdminRole(membership.role),
+    /** The site admin looking at a group they don't belong to. */
+    visitingAsSiteAdmin: membership.siteAdmin && !membership.isMember,
     members,
     challenges: await loadSharedListSummaries(userId, withGroup),
     activity,
@@ -88,6 +91,35 @@ export async function getGroupPage(userId: string, groupId: string) {
 }
 
 export type GroupPageData = NonNullable<Awaited<ReturnType<typeof getGroupPage>>>;
+
+/** The group's settings page: only for its admins (and the site admin). */
+export async function getGroupSettings(userId: string, groupId: string) {
+  if (!isUuid(groupId)) return null;
+  const membership = await getMembership(groupId, userId);
+  if (!membership || !isAdminRole(membership.role)) return null;
+
+  const [[group], members] = await Promise.all([
+    db.select({ id: groups.id, name: groups.name, description: groups.description }).from(groups).where(eq(groups.id, groupId)),
+    db
+      .select({ userId: groupMembers.userId, name: users.name, username: users.username, role: groupMembers.role })
+      .from(groupMembers)
+      .innerJoin(users, eq(users.id, groupMembers.userId))
+      .where(eq(groupMembers.groupId, groupId))
+      .orderBy(asc(groupMembers.joinedAt)),
+  ]);
+  if (!group) return null;
+  return {
+    group,
+    visitingAsSiteAdmin: membership.siteAdmin && !membership.isMember,
+    members: members.map((member) => ({
+      ...member,
+      isViewer: member.userId === userId,
+      canManage: canManageMember({ actorId: userId, actorIsAdmin: true, targetId: member.userId, targetRole: member.role }),
+    })),
+  };
+}
+
+export type GroupSettingsData = NonNullable<Awaited<ReturnType<typeof getGroupSettings>>>;
 
 /** Lightweight lookup for sub-pages: the group's name if the user belongs to it. */
 export async function getGroupSummary(userId: string, groupId: string) {
@@ -108,7 +140,7 @@ export async function getInvitePreview(userId: string, code: string) {
 
   const [memberCount, membership] = await Promise.all([
     db.$count(groupMembers, eq(groupMembers.groupId, group.id)),
-    getMembership(group.id, userId),
+    findMembership(group.id, userId),
   ]);
   return { ...group, memberCount, isMember: Boolean(membership) };
 }

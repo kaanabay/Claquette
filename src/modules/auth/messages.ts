@@ -9,6 +9,7 @@ const MESSAGES: Record<string, string> = {
   USERNAME_TOO_LONG: "Kullanıcı adı en fazla 30 karakter olabilir.",
   INVALID_USERNAME: "Kullanıcı adında yalnızca harf, rakam, nokta ve alt çizgi kullanılabilir.",
   INVALID_EMAIL: "Geçerli bir e-posta adresi gir.",
+  INVALID_PASSWORD: "Mevcut şifren hatalı.",
   PASSWORD_TOO_SHORT: "Şifre en az 8 karakter olmalı.",
   PASSWORD_TOO_LONG: "Şifre çok uzun.",
 };

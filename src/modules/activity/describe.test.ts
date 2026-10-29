@@ -38,6 +38,19 @@ describe("describeActivity", () => {
     expect(describeActivity("entry.unplanned", { title: "Stalker" })).toBe("“Stalker” ögesini plandan çıkarıp önerilere aldı");
   });
 
+  it("describes settings and member changes", () => {
+    expect(describeActivity("group.updated", { name: "Pazar Sineması", renamedFrom: "Sinema" })).toBe("grubun adını “Pazar Sineması” yaptı");
+    expect(describeActivity("group.updated", { name: "Pazar Sineması", renamedFrom: null })).toBe("grubun bilgilerini güncelledi");
+    expect(describeActivity("member.role_changed", { name: "Ayşe Yılmaz", role: "admin" })).toBe("Ayşe Yılmaz adlı üyeyi yönetici yaptı");
+    expect(describeActivity("member.role_changed", { name: "Ayşe Yılmaz", role: "member" })).toBe(
+      "Ayşe Yılmaz adlı üyenin yöneticiliğini kaldırdı",
+    );
+    expect(describeActivity("member.removed", { name: "Deniz" })).toBe("Deniz adlı üyeyi gruptan çıkardı");
+    expect(describeActivity("challenge.updated", { title: "Auteur Sineması", fields: ["başlık", "kural ayarları"] })).toBe(
+      "“Auteur Sineması” listesinin ayarlarını değiştirdi (başlık, kural ayarları)",
+    );
+  });
+
   it("says who had finished an item put into a round that was over", () => {
     expect(describeActivity("entry.planned", { title: "Persona", round: "Mart 2026", finished: "all" })).toBe(
       "“Persona” ögesini «Mart 2026» turuna ekledi · herkes bitirmişti",

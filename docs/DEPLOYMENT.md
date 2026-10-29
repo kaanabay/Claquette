@@ -84,6 +84,7 @@ kotalarını harcayabilir.
    | `DATABASE_URL_UNPOOLED` | Neon doğrudan adres (önerilir) |
    | `BETTER_AUTH_SECRET` | 4. adımda üretilen değer |
    | `REGISTRATION_CODE` | seçtiğin kayıt kodu |
+   | `SITE_ADMINS` | *İsteğe bağlı.* Site yöneticisinin kullanıcı adı (birden çoksa virgülle). Bütün grupları yönetir, `/admin` sayfasından şifre sıfırlar. Değiştirince yeniden deploy et. |
    | `TMDB_API_KEY` | TMDB anahtarı/token'ı |
    | `GOOGLE_BOOKS_API_KEY` | Google anahtarı |
    | `BETTER_AUTH_URL` | *Boş bırakılabilir.* Uygulama Vercel'in üretim adresini kendisi bulur. Kendi alan adını bağlarsan `https://alanadin.com` yaz; paylaşılan listelerin link önizlemeleri de bu adresi kullanır. |

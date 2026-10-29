@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, eq, inArray, ne } from "drizzle-orm";
+import { and, asc, count, eq, inArray, ne } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db";
 import { entries, groupMembers, groups, mediaItems, mediaTypes, roundAssignments, users, workflowStates } from "@/db/schema";
@@ -18,6 +18,7 @@ import { todayIn } from "./domain/cadence";
 import { canAcceptSuggestion } from "./domain/plan";
 import { buildSlots, loadPlanRounds, loadSlotOptions, toSlotOptions, type SlotOption } from "./planning";
 import { syncRounds } from "./rounds";
+import { activeParticipantIds, currentSettings } from "./settings";
 import { getSuggestionState } from "./suggestions";
 
 const picker = alias(users, "picker");
@@ -166,6 +167,40 @@ export async function getNewChallengeData(userId: string, groupId: string) {
   ]);
   if (!group) return null;
   return { group, members, mediaTypes: types, workflows: workflowList, today: todayIn(group.timezone), userId };
+}
+
+/** The list's settings page: its current settings for the form, for those who manage it. */
+export async function getChallengeSettingsData(userId: string, challengeId: string) {
+  const access = await getChallengeAccess(challengeId, userId);
+  if (!access?.canManage) return null;
+  const { challenge } = access;
+
+  const [members, types, workflowList, participants, [{ total }]] = await Promise.all([
+    db
+      .select({ userId: groupMembers.userId, name: users.name, username: users.username })
+      .from(groupMembers)
+      .innerJoin(users, eq(users.id, groupMembers.userId))
+      .where(eq(groupMembers.groupId, challenge.groupId))
+      .orderBy(asc(groupMembers.joinedAt)),
+    listMediaTypes(),
+    listWorkflowsForGroup(challenge.groupId),
+    activeParticipantIds(challengeId),
+    db.select({ total: count() }).from(entries).where(eq(entries.challengeId, challengeId)),
+  ]);
+  const settings = currentSettings(challenge, participants);
+
+  return {
+    challenge: { id: challenge.id, title: challenge.title, groupId: challenge.groupId },
+    visitingAsSiteAdmin: access.siteAdmin && !access.isMember,
+    form: {
+      groupId: challenge.groupId,
+      today: todayIn(challenge.timezone),
+      members,
+      mediaTypes: types,
+      workflows: workflowList,
+      edit: { ...settings, challengeId: challenge.id, locked: total > 0 },
+    },
+  };
 }
 
 export type SuggestPageParams = { round?: string; mode?: string; media?: string };

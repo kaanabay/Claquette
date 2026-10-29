@@ -49,6 +49,7 @@ async function Challenge({ params, searchParams }: Pick<PageProps<"/challenges/[
   // Notices after a redirect: only ids of items that are really here count.
   const added = (single(query.added) ?? "").split(",").filter((id) => isUuid(id) && Object.hasOwn(data.titles, id));
   const removed = single(query.removed);
+  const saved = single(query.saved);
   // Lists without a plan can be ordered by date, name or year (planned rounds keep their dates).
   const requestedSort = single(query.sort);
   const boardSort = isSortKey(requestedSort) && requestedSort !== "manual" ? requestedSort : "newest";
@@ -65,6 +66,7 @@ async function Challenge({ params, searchParams }: Pick<PageProps<"/challenges/[
           params={["added"]}
         />
       ) : null}
+      {saved && /^\d+$/.test(saved) ? <FlashNotice id={`saved:${saved}`} message="Liste ayarları kaydedildi." params={["saved"]} /> : null}
       {removed && isUuid(removed) && !Object.hasOwn(data.titles, removed) ? (
         <FlashNotice id={`removed:${removed}`} message="Öge listeden silindi." params={["removed"]} />
       ) : null}

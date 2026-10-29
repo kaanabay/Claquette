@@ -5,6 +5,7 @@ import { BackLink, PageSkeleton } from "@/components/page-skeleton";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate } from "@/lib/dates";
+import { ChangePasswordForm } from "@/modules/auth/components/change-password-form";
 import { getProfile } from "@/modules/auth/queries";
 import { requireUser } from "@/modules/auth/session";
 import { todayIn } from "@/modules/challenges/domain/cadence";
@@ -37,6 +38,16 @@ async function Account() {
               .join(" · ")}
           </CardDescription>
         </CardHeader>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Şifre değiştir</CardTitle>
+          <CardDescription>Site yöneticisinden geçici şifre aldıysan buradan kendi şifreni belirle.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ChangePasswordForm />
+        </CardContent>
       </Card>
 
       <Card>

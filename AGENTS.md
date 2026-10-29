@@ -28,7 +28,10 @@ Rules that keep this codebase working:
 - Every page renders its user-specific part inside `<Suspense>`; reading the session or the DB outside
   a boundary fails the Cache Components build.
 - Authorize close to the data: pages and Server Actions call `requireUser()` and check membership via
-  `getChallengeAccess` / `requireMembership`. The proxy is only an optimistic redirect.
+  `getChallengeAccess` / `requireMembership`. The proxy is only an optimistic redirect. `getMembership` gives the
+  site admin (`SITE_ADMINS`) owner rights in every group; ask `findMembership` when you mean "is a member".
+- List settings go through `planSettingsChange` (`src/modules/challenges/domain/settings.ts`): a settings change never
+  deletes or moves items; consequences are confirmed first, anything that would need it is blocked.
 - Server Actions return `ActionState`; throw `AppError` for user-facing failures, call `refresh()` after
   mutations, `redirect()` after creates.
 - Routes stay mounted (hidden) via React `<Activity>`: use `useFieldId()` for label/input ids and wrap

@@ -11,6 +11,7 @@ import {
   Repeat,
   Settings,
   SkipForward,
+  SlidersHorizontal,
   StickyNote,
 } from "lucide-react";
 import Link from "next/link";
@@ -104,6 +105,14 @@ export function ChallengeHeader({
                 <Settings />
               </summary>
               <div className="absolute right-0 z-20 mt-2 flex w-56 flex-col gap-1 rounded-xl border bg-card p-2 shadow-lg">
+                {access.canManage ? (
+                  <Link
+                    href={`/challenges/${challenge.id}/settings`}
+                    className={buttonVariants({ variant: "ghost", size: "sm", className: "justify-start" })}
+                  >
+                    <SlidersHorizontal /> Liste ayarları
+                  </Link>
+                ) : null}
                 {access.canManage ? (
                   <ActionForm action={setChallengeStatusAction} className="flex flex-col gap-1">
                     {hidden}

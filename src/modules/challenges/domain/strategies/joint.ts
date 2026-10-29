@@ -44,4 +44,20 @@ export const jointStrategy = defineStrategy<JointConfig>({
   describeConfig(config) {
     return config.itemsPerRound > 0 ? `Tur başına ${config.itemsPerRound} öge` : "Tur başına sınırsız öge";
   },
+
+  // A lower limit never moves items: rounds that hold more keep them and take no new ones.
+  describeConfigChange(before, after, { rounds }) {
+    const limit = after.itemsPerRound;
+    if (limit === before.itemsPerRound) return [];
+    if (limit === 0) return [{ level: "free", message: "Turlara sınırsız öge eklenebilir." }];
+    const over = rounds.filter((round) => round.count > limit);
+    if (over.length === 0) return [{ level: "free", message: `Tur başına en fazla ${limit} öge eklenebilir.` }];
+    const list = over.map((round) => `«${round.label}» (${round.count} öge)`).join(", ");
+    return [
+      {
+        level: "confirm",
+        message: `Tur başına en fazla ${limit} öge olacak. ${list} bu sınırın üstünde: ögeler olduğu gibi kalır, bu turlara yeni öge eklenmez.`,
+      },
+    ];
+  },
 });

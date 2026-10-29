@@ -122,6 +122,12 @@ export default function AboutPage() {
             <span className="text-foreground">Herkese açık listeler:</span> linki olan herkes görebilir ama arama motorlarına
             kapalıdır. Gizli listeleri yalnızca sahibi görür.
           </li>
+          <li>
+            <span className="text-foreground">Site yöneticisi:</span> uygulamayı işleten kişi, bakım ve destek için bütün grupları ve
+            ortak listeleri görüp yönetebilir; unutulan bir şifreyi geçici bir şifreyle sıfırlayabilir. Yaptığı değişiklikler grubun
+            akışında kendi adıyla görünür. Şifreler tek yönlü şifrelenmiş (hash) saklanır; yönetici dahil kimse göremez. Gizli
+            kişisel listeler ve kişisel notlar bu yetkinin dışındadır.
+          </li>
         </ul>
       </section>
 

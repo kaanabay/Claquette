@@ -10,6 +10,7 @@ Başlangıçta iki kişi için tasarlandı; grup, katılımcı, liste kuralı ve
 ## Özellikler
 
 - **Gruplar ve davet:** Grup kur, 8 haneli kodu ya da davet bağlantısını paylaş. Bir kişi birden fazla grupta olabilir.
+- **Ayarlar ve yönetim:** Grup yöneticileri grubun adını ve açıklamasını değiştirir, üyeleri yönetici yapar ya da gruptan çıkarır. Listeyi kuran ve yöneticiler listenin ayarlarını sonradan değiştirir (başlık, türler, bitiş tarihi, kural ayarları, katılımcılar); sonucu olan değişiklik kaydedilmeden önce gösterilir ve hiçbir değişiklik öge silmez ya da taşımaz. `SITE_ADMINS`'teki site yöneticisi bütün grupları yönetir ve `/admin`'den şifre sıfırlar; herkes "Hesabım"dan şifresini değiştirir.
 - **Ortak liste motoru:**
   - *Sıklık:* haftalık, iki haftalık, aylık, çeyreklik, yıllık, özel ("10 günde bir") ya da süresiz. Her periyot bir **tur** olur. Liste geçmiş bir tarihten de başlayabilir.
   - *Seçim kuralı:* **Birlikte belirliyoruz** (sıra yok; anlaştığınızı plana eklersiniz, aklınıza geleni öneri olarak bırakırsınız), **Sırayla öneri** (karşılıklı takas, zincir ya da her tur tek seçici), **Serbest öneri** (tur başına limitli ya da limitsiz), **Ortak havuz** (oylama, kura ya da elle seçim; yeni tur başlayınca otomatik seçim).

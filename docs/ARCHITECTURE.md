@@ -238,10 +238,21 @@ Hem kişisel hem ortak listeler "Dışa aktar" menüsünden indirilebilir (`src/
 - **Better Auth**: kullanıcı adı ya da e-posta ile giriş, en az 8 karakterlik şifre, 30 gün geçerli ve kullandıkça uzayan oturum. Oturum 5 dakikalık imzalı çerez önbelleğiyle okunuyor; çoğu istekte veritabanına gidilmiyor.
 - **Kayıt kodu**: `REGISTRATION_CODE` doluysa kayıt formu kodu ister. Kayıt yalnızca bu kontrolü yapan Server Action üzerinden mümkün; Better Auth'un doğrudan HTTP kayıt uç noktası kapalı (`disabledPaths`), yani kod atlanamıyor.
 - **Kaba kuvvete karşı**: giriş tarayıcıdan `/api/auth` üzerinden yapılıyor ve IP başına 10 saniyede 3 deneme ile sınırlı. Limit sayaçları veritabanında; serverless'ta her örnek kendi belleğini tuttuğu için bellek içi limit işe yaramazdı. PIN yerine şifre seçilmesinin sebebi bu: uygulama internete açık ve 4 haneli bir PIN günler içinde denenebilir.
-- **Yetkilendirme**: rol sistemi bilerek küçük (`owner / admin / member`); yalnızca ortak listeyi duraklatma, arşivleme ve davet kodunu yenileme gibi ayarları sınırlıyor. Diğer her şey grup üyeliğine bağlı ve her okuma ve yazmada sunucuda kontrol ediliyor. Kişisel listeyi yalnızca sahibi değiştirebilir.
+- **Yetkilendirme**: rol sistemi bilerek küçük (`owner / admin / member`); yalnızca grup ve liste ayarlarını, üye yönetimini, ortak listeyi duraklatma ve arşivlemeyi ve davet kodunu yenilemeyi sınırlıyor. Diğer her şey grup üyeliğine bağlı ve her okuma ve yazmada sunucuda kontrol ediliyor. Kişisel listeyi yalnızca sahibi değiştirebilir.
 - **Girdi doğrulama**: tüm form girdileri Zod'dan geçiyor. Rota parametreleri UUID değilse sayfa 404 dönüyor (Postgres'e hatalı UUID gitmiyor). Yönlendirme parametresi (`next`) yalnızca site içi göreli yolları kabul ediyor (açık yönlendirme yok).
 - **Davet**: bağlantıyı açmak gruba katmaz, "Gruba katıl" butonu katar. Next.js bağlantıları önceden yüklediği (prefetch) için GET isteğinde yan etki olmamalı.
 - **Giriş sonrası tam yükleme**: başarılı girişten sonra sayfa `router.replace` ile değil tam yüklemeyle açılır; oturum yokken önceden yüklenmiş bağlantılar (ör. logonun "/" bağlantısı) istemci önbelleğinde hâlâ giriş sayfasına yönlendirmeyi tutuyor.
+
+### 7.1 Ayarlar ve site yöneticisi
+
+- **Liste ayarları** (`/challenges/<id>/settings`, listeyi kuran ve grup yöneticileri): kayıt formuyla aynı form. Değişiklikler saf bir planlayıcıdan geçer (`challenges/domain/settings.ts`, birim testli); her alan için seviye *serbest*, *onaylı* ya da *kapalı*dır. Temel kural: ayar değişikliği hiçbir ögeyi silmez ya da taşımaz.
+  - Serbest: başlık, açıklama, tür ekleme, bitişi uzatma, sınırı yükseltme ya da kaldırma, katılımcı ekleme.
+  - Onaylı (sonuçları gösterilir, "Onayla ve kaydet" ister): sınırı düşürme (üstündeki turlar olduğu gibi kalır, yeni öge almaz), ögesi olan bir türü çıkarma (ögeler kalır), bitişi öne çekme (sonraki boş turlar silinir, son tur yeni tarihte biter), katılımcı çıkarma (ögeleri ve işaretleri kalır; geri kalan herkesin bitirdiği ögeler tamamlanır).
+  - Kapalı: listede öge varken sıklık, başlangıç, öneri kuralı ve durum akışı (turların ve ögelerin anlamı bunlara bağlı); dolu bir turdan önceye bitiş tarihi. Boş listede bunlar serbesttir, turlar yeni ayarla yeniden kurulur.
+  - Kurala özgü sonuçları kural kendisi anlatır (`describeConfigChange`, ör. "Birlikte belirliyoruz"un tur başına öge sınırı); anlatmayan kuralda ayar değişikliği serbesttir ve bundan sonrası için geçerlidir.
+  - Planlama ve uygulama aynı işlemde, liste satırı kilitlenerek yapılır (eklemenin aldığı kilit). Onay, gösterilen sonuçların parmak izini taşır; arada sonuç değişirse (biri öge eklediyse) yeniden sorulur.
+- **Grup ayarları** (`/groups/<id>/settings`, grup yöneticileri): ad, açıklama, üyeyi yönetici yapma ya da yöneticiliğini alma, gruptan çıkarma (`canManageMember`: kurucuya ve kişinin kendisine dokunulmaz). Çıkarılan üye listelerden de ayrılır; eklediği, yazdığı ve işaretlediği kalır.
+- **Site yöneticisi**: `SITE_ADMINS` ortam değişkenindeki kullanıcı adları. Arayüzden verilemez. `getMembership` site yöneticisine her grupta kurucunun yetkisini verir (üye olmasa da), sayfalar bunu bir notla belirtir; "üye mi" soruları için `findMembership` kullanılır. `/admin` bütün grupları ve kullanıcıları listeler, unutulan şifreye geçici şifre üretir (oturumları kapatır; Better Auth'un şifre hash'iyle). Gizli kişisel listeler ve kişisel notlar bu yetkinin dışında. Hakkında sayfası bunu açıkça söyler.
 
 ## 8. Next.js 16'ya özgü kararlar
 

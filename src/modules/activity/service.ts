@@ -6,8 +6,12 @@ import { activities, challenges, users } from "@/db/schema";
 
 export type ActivityType =
   | "group.created"
+  | "group.updated"
   | "member.joined"
+  | "member.role_changed"
+  | "member.removed"
   | "challenge.created"
+  | "challenge.updated"
   | "challenge.joined"
   | "challenge.left"
   | "challenge.status_changed"

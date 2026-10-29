@@ -19,10 +19,20 @@ export function describeActivity(type: string, data: Record<string, unknown>, ha
   switch (type) {
     case "group.created":
       return "grubu oluşturdu";
+    case "group.updated":
+      return typeof data.renamedFrom === "string" ? `grubun adını ${quoted(data.name)} yaptı` : "grubun bilgilerini güncelledi";
     case "member.joined":
       return "gruba katıldı";
+    case "member.role_changed":
+      return data.role === "admin" ? `${String(data.name)} adlı üyeyi yönetici yaptı` : `${String(data.name)} adlı üyenin yöneticiliğini kaldırdı`;
+    case "member.removed":
+      return `${String(data.name)} adlı üyeyi gruptan çıkardı`;
     case "challenge.created":
       return `${quoted(data.title)} ortak listesini oluşturdu`;
+    case "challenge.updated": {
+      const fields = Array.isArray(data.fields) ? data.fields.join(", ") : "";
+      return `${quoted(data.title)} listesinin ayarlarını değiştirdi${fields ? ` (${fields})` : ""}`;
+    }
     case "challenge.joined":
       return "listeye katıldı";
     case "challenge.left":

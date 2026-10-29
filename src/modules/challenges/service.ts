@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { challengeParticipants, challenges, entries, groupMembers, mediaTypes, workflows } from "@/db/schema";
 import { AppError } from "@/lib/action-state";
 import { logActivity } from "@/modules/activity/service";
+import { settleEntries } from "@/modules/entries/settle";
 import { requireMembership } from "@/modules/groups/service";
 import { getDefaultWorkflowId } from "@/modules/workflows/queries";
 import { requireChallengeAccess } from "./context";
@@ -134,6 +135,8 @@ export async function leaveChallenge(userId: string, challengeId: string): Promi
     .set({ isActive: false })
     .where(and(eq(challengeParticipants.challengeId, challengeId), eq(challengeParticipants.userId, userId)));
   await logActivity(db, { groupId: challenge.groupId, challengeId, actorId: userId, type: "challenge.left" });
+  // Items everyone still taking part has finished are done now.
+  await settleEntries(challengeId);
 }
 
 export async function setChallengeStatus(

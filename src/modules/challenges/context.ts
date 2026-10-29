@@ -43,6 +43,9 @@ export type ChallengeAccess = {
   isParticipant: boolean;
   /** Creator or group admin: may pause/archive the challenge. */
   canManage: boolean;
+  /** The site admin acts as a group admin (see getMembership). */
+  siteAdmin: boolean;
+  isMember: boolean;
 };
 
 /** Loads a challenge and checks that the user belongs to its group. */
@@ -63,6 +66,8 @@ export async function getChallengeAccess(challengeId: string, userId: string): P
     isAdmin,
     isParticipant: Boolean(participant?.isActive),
     canManage: isAdmin || challenge.createdBy === userId,
+    siteAdmin: membership.siteAdmin,
+    isMember: membership.isMember,
   };
 }
 

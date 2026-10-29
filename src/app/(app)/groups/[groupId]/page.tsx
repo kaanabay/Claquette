@@ -1,4 +1,4 @@
-import { Crown, Plus, Sparkles } from "lucide-react";
+import { Crown, Plus, Settings, Sparkles } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -15,6 +15,7 @@ import { Board } from "@/modules/boards/components/board";
 import { listBoardNotes } from "@/modules/boards/queries";
 import { ChallengeCard } from "@/modules/challenges/components/challenge-card";
 import { InvitePanel } from "@/modules/groups/components/invite-panel";
+import { SiteAdminNotice } from "@/modules/groups/components/site-admin-notice";
 import { getGroupPage } from "@/modules/groups/queries";
 import { listMediaTypes } from "@/modules/media/service";
 import { listWorkflowsWithStates } from "@/modules/workflows/queries";
@@ -58,10 +59,18 @@ async function Group({ params }: Pick<PageProps<"/groups/[groupId]">, "params">)
               {members.length} üye
             </div>
           </div>
-          <Link href={newChallengeHref} className={buttonVariants()}>
-            <Plus /> Yeni ortak liste
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            {data.isAdmin ? (
+              <Link href={`/groups/${group.id}/settings`} className={buttonVariants({ variant: "outline" })}>
+                <Settings /> Ayarlar
+              </Link>
+            ) : null}
+            <Link href={newChallengeHref} className={buttonVariants()}>
+              <Plus /> Yeni ortak liste
+            </Link>
+          </div>
         </div>
+        {data.visitingAsSiteAdmin ? <SiteAdminNotice /> : null}
       </header>
 
       <div className="grid gap-8 lg:grid-cols-[1fr_20rem]">

@@ -6,9 +6,18 @@ export type FieldErrors = Record<string, string[] | undefined>;
  * Shape returned by every Server Action used with useActionState. A batch action lists the keys
  * of the items it did add (`added`), so a form can drop them and keep only what still needs
  * attention, and the ids of the rows it created (`created`), so the page can point them out.
+ * A change with consequences comes back as `confirm` first: the form shows them and sends the
+ * token back to go ahead.
  */
 export type ActionState =
-  | { error?: string; fieldErrors?: FieldErrors; success?: string; added?: string[]; created?: string[] }
+  | {
+      error?: string;
+      fieldErrors?: FieldErrors;
+      success?: string;
+      added?: string[];
+      created?: string[];
+      confirm?: { token: string; changes: { level: "free" | "confirm" | "blocked"; message: string }[] };
+    }
   | undefined;
 
 /** An expected, user-facing failure (shown in the form instead of crashing the page). */

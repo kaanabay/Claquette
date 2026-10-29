@@ -54,6 +54,16 @@ export type PoolRules = { picksPerRound: number; selection: PoolSelection; autoD
 /** Rounds of a time-based list can be filled directly, past or future. null = no per-round limit. */
 export type PlanningRules = { itemsPerRound: number | null };
 
+/**
+ * What a settings change does to a list that already holds items: "free" applies at once,
+ * "confirm" is shown first and needs a yes, "blocked" can't be done (it would lose or move items).
+ */
+export type ChangeLevel = "free" | "confirm" | "blocked";
+export type ConfigChange = { level: ChangeLevel; message: string };
+
+/** Items in play (not dropped) per round, for rules about how many a round holds. */
+export type RoundFill = { index: number; label: string; count: number };
+
 /** Declarative description of a config option; the challenge form renders these generically. */
 export type ConfigField =
   | {
@@ -82,6 +92,11 @@ export interface ChallengeStrategy<C extends Record<string, unknown>> {
   planning?(config: C): PlanningRules;
   /** Short summary of a config for badges, e.g. "Karşılıklı · kişi başı 1 öneri". */
   describeConfig(config: C): string;
+  /**
+   * What changing the options of a list in use would do. Without it, a change counts as "free":
+   * new options apply to what comes next and existing items stay where they are.
+   */
+  describeConfigChange?(before: C, after: C, context: { rounds: readonly RoundFill[] }): ConfigChange[];
 }
 
 /** Type-erased form used by the registry and the service layer. */
