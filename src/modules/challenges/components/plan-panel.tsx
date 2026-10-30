@@ -8,6 +8,7 @@ import { SubmitButton } from "@/components/ui/submit-button";
 import { cn } from "@/lib/utils";
 import { changeEntryStateAction } from "@/modules/entries/actions";
 import { EntryCard } from "@/modules/entries/components/entry-card";
+import { describeRoundSummary, summarizeRound } from "@/modules/entries/tracking";
 import type { ChallengePageData } from "../queries";
 import { daysLeft } from "../timeline";
 import { PlaceForm } from "./place-form";
@@ -61,12 +62,18 @@ export function PlanPanel({ data }: { data: ChallengePageData }) {
 function SlotRow({ slot, data }: { slot: PlanSlotView; data: ChallengePageData }) {
   const plan = data.plan!;
   const remaining = slot.timing === "current" ? daysLeft(slot.endsOn, data.today) : null;
-  const status =
-    slot.timing === "current"
-      ? ["Bu tur", remaining].filter(Boolean).join(" · ")
-      : slot.timing === "past"
-        ? isOverdue(slot) ? "Geçti · bitirmeyen var" : "Geçti"
-        : "Sırada";
+  // "1/2 bitti" while the round is on; once it is over, also who is still to finish.
+  const summary =
+    slot.timing === "future"
+      ? null
+      : describeRoundSummary(
+          summarizeRound(slot.entries.map((card) => ({ category: card.state.category, tracking: card.tracking }))),
+          data.viewerId,
+          slot.timing === "past",
+        );
+  const status = (slot.timing === "current" ? ["Bu tur", remaining, summary] : slot.timing === "past" ? ["Geçti", summary] : ["Sırada"])
+    .filter(Boolean)
+    .join(" · ");
   const canAdd = plan.canEdit && !slot.isFull;
 
   return (
@@ -80,7 +87,13 @@ function SlotRow({ slot, data }: { slot: PlanSlotView; data: ChallengePageData }
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-semibold leading-tight">{slot.label}</p>
-          <p className={cn("mt-0.5 text-xs", slot.timing === "current" ? "font-medium text-foreground" : "text-muted-foreground")}>
+          <p
+            className={cn(
+              "mt-0.5 text-xs",
+              slot.timing === "current" ? "font-medium text-foreground" : "text-muted-foreground",
+              isOverdue(slot) && "text-amber-700 dark:text-amber-300",
+            )}
+          >
             {status}
           </p>
         </div>

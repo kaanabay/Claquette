@@ -9,15 +9,18 @@ import { isUuid } from "@/lib/utils";
 import { logActivity } from "@/modules/activity/service";
 import { requireChallengeAccess } from "@/modules/challenges/context";
 import { canAcceptSuggestion, isPlanStateChangeAllowed } from "@/modules/challenges/domain/plan";
+import { canRecordPick } from "@/modules/challenges/domain/history";
+import type { AssignmentPlan } from "@/modules/challenges/domain/strategies";
+import { findPickSlot, historyRules } from "@/modules/challenges/history";
 import { assertRoomInRound, lockSlot, PastLastRoundError, planningRules, RoundFullError } from "@/modules/challenges/planning";
 import { activeParticipants, syncRounds, type RoundRow } from "@/modules/challenges/rounds";
 import { getSuggestionState } from "@/modules/challenges/suggestions";
-import { resolveMediaItem, type MediaInput } from "@/modules/media/service";
+import { resolveMediaItem, type MediaInput, type ResolvedMedia } from "@/modules/media/service";
 import { titleColumns } from "@/modules/media/columns";
 import { formatTitle } from "@/modules/media/titles";
 import { canChangeState, firstStateIn, initialState, type StateCategory } from "@/modules/workflows/domain";
 import { getChallengeStates } from "@/modules/workflows/queries";
-import { canDeleteEntry } from "./domain";
+import { canDeleteEntry, finishOnDay } from "./domain";
 import type { ProgressStatus } from "./labels";
 import {
   assigneesOf,
@@ -96,6 +99,18 @@ export type SuggestInput = {
 const acceptsType = (challenge: { mediaTypes: string[] }, mediaType: string) =>
   challenge.mediaTypes.length === 0 || challenge.mediaTypes.includes(mediaType);
 
+/** One addition per list at a time, so two people can't add the same item at once. */
+async function lockForAddition(tx: Transaction, challengeId: string, media: ResolvedMedia): Promise<void> {
+  await tx.select({ id: challenges.id }).from(challenges).where(eq(challenges.id, challengeId)).for("update");
+  const [duplicate] = await tx
+    .select({ id: entries.id })
+    .from(entries)
+    .innerJoin(workflowStates, eq(workflowStates.id, entries.stateId))
+    .where(and(eq(entries.challengeId, challengeId), eq(entries.mediaItemId, media.id), ne(workflowStates.category, "dropped")))
+    .limit(1);
+  if (duplicate) throw new AppError(`“${formatTitle(media)}” zaten bu listede.`);
+}
+
 export async function suggestEntry(userId: string, input: SuggestInput): Promise<string> {
   const { challenge } = await requireChallengeAccess(input.challengeId, userId);
   if (!acceptsType(challenge, input.media.mediaType)) throw new AppError("Bu liste bu içerik türünü kabul etmiyor.");
@@ -115,15 +130,7 @@ export async function suggestEntry(userId: string, input: SuggestInput): Promise
   const states = await getChallengeStates(challenge.id);
 
   return db.transaction(async (tx) => {
-    // One addition per list at a time, so two people can't add the same item at once.
-    await tx.select({ id: challenges.id }).from(challenges).where(eq(challenges.id, challenge.id)).for("update");
-    const [duplicate] = await tx
-      .select({ id: entries.id })
-      .from(entries)
-      .innerJoin(workflowStates, eq(workflowStates.id, entries.stateId))
-      .where(and(eq(entries.challengeId, challenge.id), eq(entries.mediaItemId, media.id), ne(workflowStates.category, "dropped")))
-      .limit(1);
-    if (duplicate) throw new AppError(`“${formatTitle(media)}” zaten bu listede.`);
+    await lockForAddition(tx, challenge.id, media);
 
     let roundId = options.placement === "round" ? (round?.id ?? null) : null;
     let state = initialState(states, options.initialCategory);
@@ -229,6 +236,102 @@ export async function suggestEntries(
         result.failed.push({ key: item.key, label: item.label, message });
         break;
       }
+    }
+  }
+  return result;
+}
+
+export type PickInput = {
+  challengeId: string;
+  media: MediaInput;
+  roundIndex: number;
+  /** Whose pick it was and for whom: one of the round's stored assignments. */
+  slot: AssignmentPlan;
+  pitch: string | null;
+  /** A round that is over: whether the people it was meant for had finished it (default: they had). */
+  finished?: FinishedChoice;
+};
+
+/**
+ * Enters a pick for one of a round's assignments (strategies with `history`), credited to its
+ * picker: someone's own pick in a round that is over, or (group admins) anyone's, then or now
+ * (see `canRecordPick`). It goes straight in, as if the picker had added it and the recipient had
+ * accepted it; in a round that is over it is done once everyone it was meant for had finished it.
+ */
+export async function recordPick(userId: string, input: PickInput): Promise<string> {
+  const { challenge, isParticipant, isAdmin } = await requireChallengeAccess(input.challengeId, userId);
+  const rules = historyRules(challenge);
+  if (!rules) throw new AppError("Bu listede öneriler sonradan girilmiyor.");
+  if (challenge.status !== "active") throw new AppError("Liste şu an aktif değil.");
+  // The round's timing is checked below; first only whether this person may enter it at all.
+  const may = canRecordPick({ actorId: userId, pickerId: input.slot.pickerId, timing: "past", isParticipant, isAdmin });
+  if (!may.ok) throw new AppError(may.reason);
+  if (!acceptsType(challenge, input.media.mediaType)) throw new AppError("Bu liste bu içerik türünü kabul etmiyor.");
+
+  await syncRounds([challenge]);
+  const media = await resolveMediaItem(input.media, userId);
+  if (!acceptsType(challenge, media.mediaType)) throw new AppError("Bu liste bu içerik türünü kabul etmiyor.");
+  const states = await getChallengeStates(challenge.id);
+
+  return db.transaction(async (tx) => {
+    await lockForAddition(tx, challenge.id, media);
+    const found = await findPickSlot(tx, challenge, rules, input.roundIndex, input.slot);
+    if (!found.ok) throw new AppError(found.reason);
+    const { round, timing, label, pickerName, recipientName } = found.slot;
+    const allowed = canRecordPick({ actorId: userId, pickerId: input.slot.pickerId, timing, isParticipant, isAdmin });
+    if (!allowed.ok) throw new AppError(allowed.reason);
+
+    // A round that is over says who had finished it; a pick for the current one is simply accepted.
+    let choice: FinishedChoice | null = null;
+    let userIds: string[] = [];
+    let state = initialState(states, "active");
+    if (timing === "past") {
+      const assignees = assigneesOf(input.slot.recipientId, await activeParticipants(challenge.id, tx));
+      choice = input.finished ?? "all";
+      userIds = finishedBy(choice, assignees, userId).filter((id) => assignees.includes(id));
+      if (progressOutcome(assignees, (id) => (userIds.includes(id) ? "completed" : null)) === "done") {
+        state = firstStateIn(states, "done") ?? state;
+      }
+    }
+
+    const [entry] = await tx
+      .insert(entries)
+      .values({
+        challengeId: challenge.id,
+        roundId: round.id,
+        mediaItemId: media.id,
+        stateId: state.id,
+        suggestedBy: input.slot.pickerId,
+        suggestedFor: input.slot.recipientId,
+        pitch: input.pitch,
+      })
+      .returning({ id: entries.id });
+    await markFinished(tx, entry.id, userIds, finishedOn(round));
+    await logActivity(tx, {
+      groupId: challenge.groupId,
+      challengeId: challenge.id,
+      entryId: entry.id,
+      actorId: userId,
+      type: "entry.recorded",
+      data: { title: formatTitle(media), round: label, picker: pickerName, recipient: recipientName, finished: choice },
+    });
+    return entry.id;
+  });
+}
+
+/** Several picks for one assignment, each on its own (one failing doesn't stop the rest). */
+export async function recordPicks(
+  userId: string,
+  input: Omit<PickInput, "media"> & { items: { key: string; label: string; media: MediaInput }[] },
+): Promise<BatchResult> {
+  const result: BatchResult = { added: [], ids: [], failed: [] };
+  for (const item of input.items) {
+    try {
+      result.ids.push(await recordPick(userId, { ...input, media: item.media }));
+      result.added.push(item.key);
+    } catch (error) {
+      if (!(error instanceof AppError)) throw error;
+      result.failed.push({ key: item.key, label: item.label, message: error.message });
     }
   }
   return result;
@@ -453,6 +556,19 @@ export async function updateProgress(
     });
   }
   return previous;
+}
+
+/** Moves the user's own finish to the day it really happened (they marked it later). */
+export async function setFinishedOn(userId: string, entryId: string, day: Date): Promise<void> {
+  const { entry } = await loadEntryContext(entryId, userId);
+  const mine = and(eq(entryProgress.entryId, entry.id), eq(entryProgress.userId, userId));
+  const [existing] = await db
+    .select({ status: entryProgress.status, startedAt: entryProgress.startedAt })
+    .from(entryProgress)
+    .where(mine)
+    .limit(1);
+  if (existing?.status !== "completed") throw new AppError("Önce bitirdiğini işaretle.");
+  await db.update(entryProgress).set(finishOnDay(existing, day)).where(mine);
 }
 
 export async function addNote(

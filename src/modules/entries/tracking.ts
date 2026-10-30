@@ -66,7 +66,13 @@ export function finishedBy(choice: FinishedChoice, assignees: readonly string[],
   return choice === "me" ? [actorId] : [];
 }
 
-export type TrackingPerson = { id: string; name: string; status: ProgressStatus | null };
+export type TrackingPerson = {
+  id: string;
+  name: string;
+  status: ProgressStatus | null;
+  /** The day they finished it, when they did. */
+  completedAt?: Date | null;
+};
 
 export type Tracking = {
   /** The assignees, with their own progress. */
@@ -97,6 +103,24 @@ export function trackEntry(input: {
     timing: input.timing,
     overdue: input.timing === "past" && input.category === "active" && waiting.length > 0,
   };
+}
+
+export type RoundSummary = { done: number; total: number; waiting: TrackingPerson[] };
+
+/** A round at a glance ("2/2 bitti"), from its items in play: how many are done, who is still to go. */
+export function summarizeRound(items: readonly { category: StateCategory; tracking: Tracking | null }[]): RoundSummary {
+  const waiting = new Map<string, TrackingPerson>();
+  for (const item of items) {
+    for (const person of item.tracking?.waiting ?? []) waiting.set(person.id, person);
+  }
+  return { done: items.filter((item) => item.category === "done").length, total: items.length, waiting: [...waiting.values()] };
+}
+
+/** "2/2 bitti", or "1/2 bitti · bitirmeyen: Ali" once the round is over; null for an empty round. */
+export function describeRoundSummary(summary: RoundSummary, viewerId: string, over: boolean): string | null {
+  if (summary.total === 0) return null;
+  const counted = `${summary.done}/${summary.total} bitti`;
+  return over && summary.waiting.length > 0 ? `${counted} · bitirmeyen: ${listPeople(summary.waiting, viewerId)}` : counted;
 }
 
 /** "Ali", "sen ve Ali", "Ali, Ayşe ve 2 kişi daha": the viewer reads as "sen". */

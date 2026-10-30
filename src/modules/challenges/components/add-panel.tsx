@@ -7,14 +7,23 @@ import type { SuggestPageData, SuggestPageParams } from "../queries";
 import { ScrollIntoView } from "./scroll-into-view";
 
 /**
- * Adding happens on the list's own page (`?add=1`, with the same `round`, `mode` and `media`
- * parameters the plan's links use), so the list stays in sight and there is nothing to go back to.
+ * Adding happens on the list's own page (`?add=1`, with the same `round`, `mode`, `media` and
+ * `slot` parameters the plan's and the rounds' links use), so the list stays in sight and there
+ * is nothing to go back to.
  */
 export function AddPanel({ data, link, closeHref }: { data: SuggestPageData; link: SuggestPageParams; closeHref: string }) {
-  const { options } = data;
+  const { options, pick } = data;
   const placement = options.allowed ? options.placement : null;
-  const title = placement === "plan" ? "Listeye ekle" : placement === "pool" ? "Havuza aday ekle" : "Öneri yap";
-  const linkKey = [link.round, link.mode, link.media].join(":");
+  const title = pick
+    ? pick.ok && pick.timing === "current"
+      ? "Adına ekle"
+      : "Geçmişi doldur"
+    : placement === "plan"
+      ? "Listeye ekle"
+      : placement === "pool"
+        ? "Havuza aday ekle"
+        : "Öneri yap";
+  const linkKey = [link.round, link.mode, link.media, link.slot].join(":");
 
   return (
     <ScrollIntoView scrollKey={linkKey}>
@@ -22,7 +31,11 @@ export function AddPanel({ data, link, closeHref }: { data: SuggestPageData; lin
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
-            {options.allowed && options.remaining !== null ? (
+            {pick?.ok ? (
+              <p className="text-sm text-muted-foreground">
+                «{pick.roundLabel}» turu · {pick.pickerName} → {pick.recipientName}
+              </p>
+            ) : !pick && options.allowed && options.remaining !== null ? (
               <p className="text-sm text-muted-foreground">{options.remaining} öneri hakkın var</p>
             ) : null}
           </div>
@@ -30,7 +43,26 @@ export function AddPanel({ data, link, closeHref }: { data: SuggestPageData; lin
             <X />
           </Link>
         </div>
-        {options.allowed ? (
+        {pick ? (
+          pick.ok ? (
+            <SuggestForm
+              key={linkKey}
+              challengeId={data.challenge.id}
+              mediaTypes={data.mediaTypes}
+              targets={[]}
+              placement="round"
+              pick={pick}
+              picks={data.picks}
+              existing={data.existing}
+              maxItems={pick.open}
+              autoFocus
+            />
+          ) : (
+            <EmptyState icon={<Hourglass />} title="Bu öneri eklenemiyor">
+              {pick.reason}
+            </EmptyState>
+          )
+        ) : options.allowed ? (
           <SuggestForm
             // A link with another round/mode/item starts a fresh form; a refresh after a partial add keeps it.
             key={linkKey}

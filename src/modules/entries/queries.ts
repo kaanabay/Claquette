@@ -57,7 +57,7 @@ export type EntryCard = {
   suggestedFor: { id: string; name: string } | null;
   pitch: string | null;
   createdAt: Date;
-  mine: { status: ProgressStatus; rating: number | null } | null;
+  mine: { status: ProgressStatus; rating: number | null; completedAt: Date | null } | null;
   stats: { avgRating: number | null; ratingCount: number; completedCount: number };
   votes: number;
   votedByMe: boolean;
@@ -131,7 +131,13 @@ export async function loadEntryCards(userId: string, where: SQL | undefined, lim
   const challengeIds = [...new Set(rows.map((row) => row.challengeId))];
   const [progressRows, participantRows, votes] = await Promise.all([
     db
-      .select({ entryId: entryProgress.entryId, userId: entryProgress.userId, status: entryProgress.status, rating: entryProgress.rating })
+      .select({
+        entryId: entryProgress.entryId,
+        userId: entryProgress.userId,
+        status: entryProgress.status,
+        rating: entryProgress.rating,
+        completedAt: entryProgress.completedAt,
+      })
       .from(entryProgress)
       .where(inArray(entryProgress.entryId, ids)),
     db
@@ -151,11 +157,11 @@ export async function loadEntryCards(userId: string, where: SQL | undefined, lim
       .groupBy(entryVotes.entryId),
   ]);
 
-  type Progress = { status: ProgressStatus; rating: number | null };
+  type Progress = { status: ProgressStatus; rating: number | null; completedAt: Date | null };
   const progressByEntry = new Map<string, Map<string, Progress>>();
-  for (const { entryId, userId: personId, status, rating } of progressRows) {
+  for (const { entryId, userId: personId, ...progress } of progressRows) {
     if (!progressByEntry.has(entryId)) progressByEntry.set(entryId, new Map());
-    progressByEntry.get(entryId)!.set(personId, { status, rating });
+    progressByEntry.get(entryId)!.set(personId, progress);
   }
   const participantsByChallenge = new Map<string, { userId: string; name: string }[]>();
   for (const { challengeId, ...participant } of participantRows) {
@@ -181,7 +187,12 @@ export async function loadEntryCards(userId: string, where: SQL | undefined, lim
     const tracking = trackEntry({
       category: row.stateCategory,
       timing,
-      people: assignees.map((id) => ({ id, name: names.get(id) ?? "?", status: progress.get(id)?.status ?? null })),
+      people: assignees.map((id) => ({
+        id,
+        name: names.get(id) ?? "?",
+        status: progress.get(id)?.status ?? null,
+        completedAt: progress.get(id)?.completedAt ?? null,
+      })),
     });
     return {
       id: row.id,
@@ -217,7 +228,7 @@ export async function loadEntryCards(userId: string, where: SQL | undefined, lim
       suggestedFor: row.suggestedForId && row.suggestedForName ? { id: row.suggestedForId, name: row.suggestedForName } : null,
       pitch: row.pitch,
       createdAt: row.createdAt,
-      mine: own ? { status: own.status, rating: own.rating } : null,
+      mine: own ?? null,
       stats: {
         avgRating: ratings.length ? ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length : null,
         ratingCount: ratings.length,
@@ -284,6 +295,7 @@ export async function getEntryPage(userId: string, entryId: string) {
         userId: entryProgress.userId,
         status: entryProgress.status,
         rating: entryProgress.rating,
+        completedAt: entryProgress.completedAt,
         name: users.name,
       })
       .from(entryProgress)
@@ -379,7 +391,12 @@ export async function getEntryPage(userId: string, entryId: string) {
           todayIn(access.challenge.timezone),
         )
       : null,
-    people: assignees.map((id) => ({ id, name: nameOf(id), status: progressById.get(id)?.status ?? null })),
+    people: assignees.map((id) => ({
+      id,
+      name: nameOf(id),
+      status: progressById.get(id)?.status ?? null,
+      completedAt: progressById.get(id)?.completedAt ?? null,
+    })),
   });
 
   return {

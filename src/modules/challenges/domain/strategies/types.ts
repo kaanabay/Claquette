@@ -55,6 +55,13 @@ export type PoolRules = { picksPerRound: number; selection: PoolSelection; autoD
 export type PlanningRules = { itemsPerRound: number | null };
 
 /**
+ * Picks can be entered afterwards, one stored assignment at a time: what each picker chose in a
+ * round that is over (before the list was opened here, or nobody entered it in time), and, for
+ * group admins, someone else's pick in the current round too (see domain/history.ts).
+ */
+export type HistoryRules = { picksPerAssignment: number };
+
+/**
  * What a settings change does to a list that already holds items: "free" applies at once,
  * "confirm" is shown first and needs a yes, "blocked" can't be done (it would lose or move items).
  */
@@ -90,6 +97,8 @@ export interface ChallengeStrategy<C extends Record<string, unknown>> {
   poolRules?(config: C): PoolRules;
   /** Present on strategies that let people fill any round themselves (see domain/plan.ts). */
   planning?(config: C): PlanningRules;
+  /** Present on strategies whose picks can be entered afterwards, per assignment (see domain/history.ts). */
+  history?(config: C): HistoryRules;
   /** Short summary of a config for badges, e.g. "Karşılıklı · kişi başı 1 öneri". */
   describeConfig(config: C): string;
   /**

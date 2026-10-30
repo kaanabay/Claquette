@@ -11,6 +11,7 @@ import { listBoardNotes } from "@/modules/boards/queries";
 import { AddPanel } from "@/modules/challenges/components/add-panel";
 import { ChallengeHeader } from "@/modules/challenges/components/challenge-header";
 import { EntryBoard } from "@/modules/challenges/components/entry-board";
+import { HistoryPanel } from "@/modules/challenges/components/history-panel";
 import { DroppedPanel, PlanPanel, SuggestionsPanel } from "@/modules/challenges/components/plan-panel";
 import { PoolPanel } from "@/modules/challenges/components/pool-panel";
 import { RoundPanel } from "@/modules/challenges/components/round-panel";
@@ -35,8 +36,9 @@ const BOARD_SORTS: readonly SortKey[] = ["newest", "oldest", "title", "year"];
 async function Challenge({ params, searchParams }: Pick<PageProps<"/challenges/[challengeId]">, "params" | "searchParams">) {
   const [{ challengeId }, query] = await Promise.all([params, searchParams]);
   const user = await requireUser();
-  // ?add=1 opens the add panel; round / mode / media come from the plan's links and personal lists.
-  const link = { round: single(query.round), mode: single(query.mode), media: single(query.media) };
+  // ?add=1 opens the add panel; round / mode / media come from the plan's links and personal lists,
+  // round + slot from a past round's missing pick.
+  const link = { round: single(query.round), mode: single(query.mode), media: single(query.media), slot: single(query.slot) };
   const [data, types, adder] = await Promise.all([
     getChallengePage(user.id, challengeId),
     listMediaTypes(),
@@ -79,6 +81,7 @@ async function Challenge({ params, searchParams }: Pick<PageProps<"/challenges/[
       ) : (
         <>
           <RoundPanel data={data} />
+          <HistoryPanel data={data} />
           <PoolPanel data={data} />
           <section>
             <SectionTitle action={data.entryCount > 1 ? <SortSelect value={boardSort} options={BOARD_SORTS} /> : null}>

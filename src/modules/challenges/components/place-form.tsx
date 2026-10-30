@@ -5,7 +5,7 @@ import { ActionForm } from "@/components/ui/action-form";
 import { NativeSelect } from "@/components/ui/fields";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { placeEntryAction } from "@/modules/entries/actions";
-import { finishedChoices } from "@/modules/entries/labels";
+import { finishedChoices, groupAudience } from "@/modules/entries/labels";
 import { describeSlotOption } from "../domain/plan";
 import type { SlotOption } from "../planning";
 
@@ -57,7 +57,7 @@ export function PlaceForm({
       </NativeSelect>
       {askWho ? (
         <NativeSelect name="finished" defaultValue="all" aria-label="Kim bitirdi?" className="h-8 w-auto text-xs">
-          {finishedChoices(participantCount <= 1).map((choice) => (
+          {finishedChoices(groupAudience(participantCount)).map((choice) => (
             <option key={choice.value} value={choice.value}>
               {choice.label}
             </option>

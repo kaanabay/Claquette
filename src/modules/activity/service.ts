@@ -20,6 +20,7 @@ export type ActivityType =
   | "entry.state_changed"
   | "entry.selected"
   | "entry.planned"
+  | "entry.recorded"
   | "entry.moved"
   | "entry.unplanned"
   | "entry.deleted"

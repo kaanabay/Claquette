@@ -45,6 +45,9 @@ Rules that keep this codebase working:
 - Completion follows people, not dates (`src/modules/entries/tracking.ts`): an entry is done when everyone it is
   meant for has finished it, and "overdue" is derived from round dates on every read, never stored. Placing or
   moving an item never flips its state; a past round asks who finished it.
+- Picks entered afterwards (`history()` on a strategy, `domain/history.ts`, `recordPick`) go into one of a round's stored
+  assignments and are credited to its picker; `canRecordPick` decides who may (own picks once the round is over,
+  group admins anyone's, then or now). They start accepted.
 - Planning (`planning()` on a strategy, `domain/plan.ts`, `planning.ts`) may create future rounds early.
   Rounds must stay contiguous from index 0 (use `createRoundsThrough`), and the current round is found by
   date (`getCurrentRound`), never as "the latest row".

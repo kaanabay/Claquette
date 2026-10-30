@@ -4,22 +4,28 @@ import { Check } from "lucide-react";
 import { useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toaster";
+import { formatShortDate } from "@/lib/short-date";
 import { cn } from "@/lib/utils";
 import { markProgressAction } from "../actions";
 import { progressLabel, type ProgressStatus } from "../labels";
 
-/** One tap marks an item finished for the viewer, or takes it back; the notice offers "Geri al". */
+/**
+ * One tap marks an item finished for the viewer (today), or takes it back; the notice offers
+ * "Geri al". Another day is set on the item's page.
+ */
 export function ProgressToggle({
   entryId,
   title,
   mediaType,
   status,
+  completedAt = null,
   className,
 }: {
   entryId: string;
   title: string;
   mediaType: string;
   status: ProgressStatus | null;
+  completedAt?: Date | null;
   className?: string;
 }) {
   const [pending, startTransition] = useTransition();
@@ -52,6 +58,7 @@ export function ProgressToggle({
       size="sm"
       variant={done ? "default" : "outline"}
       aria-pressed={done}
+      title={done && completedAt ? `Bitirdiğin gün: ${formatShortDate(completedAt)}` : undefined}
       disabled={pending}
       className={cn("h-7 px-2.5", className)}
       onClick={() =>

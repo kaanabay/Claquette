@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarCheck, Lightbulb, Send } from "lucide-react";
+import { ArrowRight, CalendarCheck, Lightbulb, Send } from "lucide-react";
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label, NativeSelect, Textarea } from "@/components/ui/fields";
@@ -12,7 +12,7 @@ import { useFormAction } from "@/components/ui/use-form-action";
 import { cn } from "@/lib/utils";
 import { describeSlotOption, type SlotTiming } from "@/modules/challenges/domain/plan";
 import { suggestEntryAction } from "@/modules/entries/actions";
-import { finishedChoices } from "@/modules/entries/labels";
+import { finishedChoices, groupAudience, type FinishedAudience } from "@/modules/entries/labels";
 import { itemKey, type ExistingMedia } from "../keys";
 import { formatTitle } from "../titles";
 import { pickFromCatalog, type CatalogPick, type MediaTypeOption } from "../types";
@@ -32,6 +32,17 @@ type Props = {
     /** Items per round; null = no limit. */
     capacity: number | null;
     participantCount: number;
+  } | null;
+  /** A pick entered afterwards or on someone's behalf (lists with history): whose, for whom, when. */
+  pick?: {
+    timing: "past" | "current";
+    roundIndex: number;
+    roundLabel: string;
+    slot: string;
+    pickerName: string;
+    pickerIsViewer: boolean;
+    recipientName: string;
+    audience: FinishedAudience;
   } | null;
   picks?: CatalogPick[];
   preselected?: CatalogPick | null;
@@ -59,6 +70,8 @@ const SUBMIT_LABELS = {
   suggest: ["Öneri olarak ekle", "ögeyi öneri olarak ekle"],
   pool: ["Havuza ekle", "ögeyi havuza ekle"],
   round: ["Öneriyi gönder", "öneriyi gönder"],
+  past: ["Geçmişe ekle", "ögeyi geçmişe ekle"],
+  behalf: ["Adına ekle", "ögeyi adına ekle"],
 } as const;
 
 function SuggestFormInner({
@@ -67,6 +80,7 @@ function SuggestFormInner({
   targets,
   placement,
   plan,
+  pick = null,
   picks,
   preselected,
   existing,
@@ -112,7 +126,18 @@ function SuggestFormInner({
   const chosen = planning?.options.find((option) => String(option.index) === roundIndex);
   const intoPlan = planning !== null && planMode === "plan";
   const count = picked.length + (manualFilled ? 1 : 0);
-  const [one, many] = SUBMIT_LABELS[isPlan ? (intoPlan ? "plan" : "suggest") : placement];
+  const past = pick?.timing === "past";
+  const [one, many] = SUBMIT_LABELS[pick ? (past ? "past" : "behalf") : isPlan ? (intoPlan ? "plan" : "suggest") : placement];
+  const pickerFirstName = pick?.pickerName.split(" ")[0];
+  const question = pick
+    ? pick.pickerIsViewer
+      ? "Ne önermiştin?"
+      : past
+        ? `${pickerFirstName} ne önermişti?`
+        : `${pickerFirstName} ne önerdi?`
+    : isPlan
+      ? "Ne ekliyorsun?"
+      : "Ne öneriyorsun?";
 
   return (
     <form {...formProps} className="flex flex-col gap-6">
@@ -120,7 +145,7 @@ function SuggestFormInner({
 
       <Card>
         <CardHeader>
-          <CardTitle>{isPlan ? "Ne ekliyorsun?" : "Ne öneriyorsun?"}</CardTitle>
+          <CardTitle>{question}</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           {preselected && preselectedIsIn ? (
@@ -141,7 +166,31 @@ function SuggestFormInner({
         </CardContent>
       </Card>
 
-      {isPlan ? (
+      {pick ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>«{pick.roundLabel}» turu</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <input type="hidden" name="pickRound" value={pick.roundIndex} />
+            <input type="hidden" name="pickSlot" value={pick.slot} />
+            <p className="flex flex-wrap items-center gap-1.5 text-sm">
+              <span className="font-medium">{pick.pickerName}</span>
+              <ArrowRight className="size-3.5 text-muted-foreground" />
+              <span className="font-medium">{pick.recipientName}</span>
+            </p>
+            {pick.pickerIsViewer ? null : (
+              <p className="-mt-2 text-xs text-muted-foreground">
+                {past
+                  ? `Öge, o turda öneren ${pick.pickerName} adına yazılır.`
+                  : `Öge, ${pick.pickerName} adına ve kabul edilmiş olarak girer.`}
+              </p>
+            )}
+            {past ? <FinishedField audience={pick.audience} /> : null}
+            <PitchField intoPlan errors={errors.pitch} many={count > 1} />
+          </CardContent>
+        </Card>
+      ) : isPlan ? (
         <Card>
           <CardHeader>
             <CardTitle>Nereye?</CardTitle>
@@ -212,23 +261,7 @@ function SuggestFormInner({
               </div>
             ) : null}
             {intoPlan && planning && chosen?.timing === "past" ? (
-              <fieldset className="flex flex-col gap-2">
-                <legend className="mb-2 text-sm font-medium">Bu tur geçti. Kim bitirdi?</legend>
-                <div className="flex flex-wrap gap-2">
-                  {finishedChoices(planning.participantCount <= 1).map((choice, index) => (
-                    <label
-                      key={choice.value}
-                      className="flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm has-[:checked]:border-primary has-[:checked]:bg-accent"
-                    >
-                      <input type="radio" name="finished" value={choice.value} defaultChecked={index === 0} className="accent-primary" />
-                      {choice.label}
-                    </label>
-                  ))}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Öge, ait olduğu herkes bitirince “Tamamlandı” olur; bitirmeyen varsa “Zamanı geçti” diye görünür.
-                </p>
-              </fieldset>
+              <FinishedField audience={groupAudience(planning.participantCount)} />
             ) : null}
             <PitchField intoPlan={intoPlan} errors={errors.pitch} many={count > 1} />
           </CardContent>
@@ -282,6 +315,29 @@ function SuggestFormInner({
         </SubmitButton>
       </div>
     </form>
+  );
+}
+
+/** "Who finished it?" for a round that is already over; the first choice is the default. */
+function FinishedField({ audience }: { audience: FinishedAudience }) {
+  return (
+    <fieldset className="flex flex-col gap-2">
+      <legend className="mb-2 text-sm font-medium">Bu tur geçti. Kim bitirdi?</legend>
+      <div className="flex flex-wrap gap-2">
+        {finishedChoices(audience).map((choice, index) => (
+          <label
+            key={choice.value}
+            className="flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm has-[:checked]:border-primary has-[:checked]:bg-accent"
+          >
+            <input type="radio" name="finished" value={choice.value} defaultChecked={index === 0} className="accent-primary" />
+            {choice.label}
+          </label>
+        ))}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Öge, ait olduğu herkes bitirince “Tamamlandı” olur; bitirmeyen varsa “Zamanı geçti” diye görünür.
+      </p>
+    </fieldset>
   );
 }
 

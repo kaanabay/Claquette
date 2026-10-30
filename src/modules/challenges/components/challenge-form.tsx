@@ -203,7 +203,14 @@ function ChallengeFormInner({ groupId, today, members, mediaTypes, workflows, ed
                   onChange={(event) => setStartsOn(event.target.value)}
                   required
                 />
-                <p className="text-xs text-muted-foreground">Turlar bu tarihten sayılır (ör. ayın 1’i ya da bir Pazartesi). Geçmiş bir tarih de olur; geçmiş turları sonradan doldurursunuz.</p>
+                <p className="text-xs text-muted-foreground">
+                  Turlar bu tarihten sayılır (ör. ayın 1’i ya da bir Pazartesi).{" "}
+                  {strategy.planning
+                    ? "Geçmiş bir tarih de olur; geçmiş turları sonradan doldurursunuz."
+                    : strategy.history
+                      ? "Geçmiş bir tarih de olur; geçen turların önerilerini sonradan girersiniz. Her turda kimin kime önereceği bu tarihe ve katılımcıların sırasına göre belirlenir."
+                      : "Geçmiş bir tarih de olur."}
+                </p>
                 <FieldError errors={errors.startsOn} />
               </div>
             )}

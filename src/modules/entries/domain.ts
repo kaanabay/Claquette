@@ -7,3 +7,8 @@
 export function canDeleteEntry(input: { actorId: string; suggestedBy: string | null; canManage: boolean }): boolean {
   return input.canManage || (input.suggestedBy !== null && input.actorId === input.suggestedBy);
 }
+
+/** A finish moved to the day it really happened: a start recorded after that day moves back with it. */
+export function finishOnDay(progress: { startedAt: Date | null }, day: Date): { startedAt: Date; completedAt: Date } {
+  return { startedAt: progress.startedAt && progress.startedAt < day ? progress.startedAt : day, completedAt: day };
+}

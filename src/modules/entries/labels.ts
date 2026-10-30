@@ -23,18 +23,32 @@ export function progressLabel(status: ProgressStatus, mediaType?: string): strin
   return (mediaType && TYPE_LABELS[mediaType]?.[status]) || DEFAULT_LABELS[status];
 }
 
+/** Who an item is meant for, as the "who finished it?" question addresses them. */
+export type FinishedAudience = { kind: "group" } | { kind: "me" } | { kind: "person"; name: string };
+
+/** Everyone taking part; a list of one is just "me". */
+export const groupAudience = (participantCount: number): FinishedAudience =>
+  participantCount <= 1 ? { kind: "me" } : { kind: "group" };
+
 /** "Who finished it?" for an item going into a round that is already over; the first is the default. */
-export function finishedChoices(solo: boolean): { value: FinishedChoice; label: string }[] {
-  return solo
-    ? [
-        { value: "all", label: "Bitirdim" },
-        { value: "none", label: "Henüz bitmedi" },
-      ]
-    : [
-        { value: "all", label: "Hepimiz bitirdik" },
-        { value: "me", label: "Sadece ben bitirdim" },
-        { value: "none", label: "Henüz bitmedi" },
-      ];
+export function finishedChoices(audience: FinishedAudience): { value: FinishedChoice; label: string }[] {
+  if (audience.kind === "me") {
+    return [
+      { value: "all", label: "Bitirdim" },
+      { value: "none", label: "Henüz bitmedi" },
+    ];
+  }
+  if (audience.kind === "person") {
+    return [
+      { value: "all", label: `${audience.name.split(" ")[0]} bitirdi` },
+      { value: "none", label: "Henüz bitirmedi" },
+    ];
+  }
+  return [
+    { value: "all", label: "Hepimiz bitirdik" },
+    { value: "me", label: "Sadece ben bitirdim" },
+    { value: "none", label: "Henüz bitmedi" },
+  ];
 }
 
 /** Ratings are 1–10; averages keep one decimal ("7,5"). */

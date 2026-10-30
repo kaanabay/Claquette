@@ -128,6 +128,10 @@ export default function AboutPage() {
             akışında kendi adıyla görünür. Şifreler tek yönlü şifrelenmiş (hash) saklanır; yönetici dahil kimse göremez. Gizli
             kişisel listeler ve kişisel notlar bu yetkinin dışındadır.
           </li>
+          <li>
+            <span className="text-foreground">Grup yöneticileri:</span> sırayla öneri listelerinde bir üyenin önerisini onun adına
+            girebilir (ör. geçmiş turları doldururken). Öge o üyenin önerisi olarak görünür; kimin girdiği grubun akışında yazar.
+          </li>
         </ul>
       </section>
 

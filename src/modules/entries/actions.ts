@@ -4,8 +4,10 @@ import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { type ActionState, type BatchResult, batchState, toActionState, validationError, validationErrors } from "@/lib/action-state";
-import { formValues } from "@/lib/forms";
+import { daySchema, formValues } from "@/lib/forms";
+import { fromDayValue } from "@/lib/short-date";
 import { requireUser } from "@/modules/auth/session";
+import { parseSlotKey } from "@/modules/challenges/domain/history";
 import { readMediaToAdd } from "@/modules/media/input";
 import { PROGRESS_STATUSES, type ProgressStatus } from "./labels";
 import {
@@ -14,6 +16,8 @@ import {
   deleteEntry,
   deleteNote,
   placeEntry,
+  recordPicks,
+  setFinishedOn,
   suggestEntries,
   toggleVote,
   unplanEntry,
@@ -35,6 +39,9 @@ const suggestSchema = z.object({
     .transform((value) => (typeof value === "number" ? value : null)),
   // Only sent for a round that is already over.
   finished: z.enum(FINISHED_CHOICES).optional(),
+  // A pick entered afterwards, or on someone's behalf: which round, and whose pick for whom.
+  pickRound: z.coerce.number().int().min(0).optional(),
+  pickSlot: z.string().max(200).optional(),
 });
 
 export async function suggestEntryAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -45,17 +52,29 @@ export async function suggestEntryAction(_prev: ActionState, formData: FormData)
   if (!parsed.success || !media.ok) return validationErrors([parsed.error, media.ok ? undefined : media.error]);
   if (media.items.length === 0) return { error: "Eklemek için en az bir öge seç." };
   const data = parsed.data;
+  const slot = data.pickSlot ? parseSlotKey(data.pickSlot) : null;
+  if (data.pickSlot && (!slot || data.pickRound === undefined)) return { error: "Bu tur bulunamadı." };
 
   let result: BatchResult;
   try {
-    result = await suggestEntries(user.id, {
-      challengeId: data.challengeId,
-      items: media.items,
-      recipientId: data.recipientId,
-      pitch: data.pitch,
-      plan: data.planMode ? { mode: data.planMode, roundIndex: data.roundIndex } : undefined,
-      finished: data.finished,
-    });
+    result =
+      slot && data.pickRound !== undefined
+        ? await recordPicks(user.id, {
+            challengeId: data.challengeId,
+            items: media.items,
+            roundIndex: data.pickRound,
+            slot,
+            pitch: data.pitch,
+            finished: data.finished,
+          })
+        : await suggestEntries(user.id, {
+            challengeId: data.challengeId,
+            items: media.items,
+            recipientId: data.recipientId,
+            pitch: data.pitch,
+            plan: data.planMode ? { mode: data.planMode, roundIndex: data.roundIndex } : undefined,
+            finished: data.finished,
+          });
   } catch (error) {
     return toActionState(error);
   }
@@ -118,6 +137,12 @@ export async function updateProgressAction(_prev: ActionState, formData: FormDat
       rating: input.rating === undefined ? undefined : input.rating === 0 ? null : input.rating,
     });
   });
+}
+
+export async function setFinishedOnAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  return entryAction(formData, z.object({ entryId: z.uuid(), day: daySchema }), (userId, input) =>
+    setFinishedOn(userId, input.entryId, fromDayValue(input.day)),
+  );
 }
 
 /** One-tap "İzledim/Okudum" on a card; the previous status lets the notice offer "Geri al". */

@@ -111,6 +111,7 @@ function TrackingRow({ card }: { card: EntryCardData }) {
           title={formatTitle(card.media)}
           mediaType={card.media.mediaType}
           status={card.mine?.status ?? null}
+          completedAt={card.mine?.completedAt ?? null}
           className="ml-auto"
         />
       ) : null}
@@ -120,8 +121,10 @@ function TrackingRow({ card }: { card: EntryCardData }) {
 
 function PersonChip({ person, mediaType }: { person: TrackingPerson; mediaType: string }) {
   const firstName = person.name.split(" ")[0];
-  const status = person.status ? progressLabel(person.status, mediaType) : "Başlamadı";
   const done = person.status === "completed";
+  const status = person.status
+    ? `${progressLabel(person.status, mediaType)}${done && person.completedAt ? ` · ${formatShortDate(person.completedAt)}` : ""}`
+    : "Başlamadı";
   return (
     <Badge
       tone={done ? "emerald" : undefined}

@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 import type { ProgressStatus } from "./labels";
 import {
   assigneesOf,
+  describeRoundSummary,
   finishedBy,
   listPeople,
   progressOutcome,
   roundTiming,
   stateAfterProgress,
+  summarizeRound,
   trackEntry,
   type TrackingPerson,
 } from "./tracking";
@@ -129,5 +131,32 @@ describe("listPeople", () => {
     expect(listPeople(people.slice(0, 2), "kaan")).toBe("sen ve Ali");
     expect(listPeople(people.slice(0, 3), "kaan")).toBe("sen, Ali ve Ayşe");
     expect(listPeople(people, "kaan")).toBe("sen, Ali ve 2 kişi daha");
+  });
+});
+
+describe("summarizeRound", () => {
+  const kaan: TrackingPerson = { id: "kaan", name: "Kaan Abay", status: null };
+  const ali: TrackingPerson = { id: "ali", name: "Ali Can", status: null };
+  const waitingFor = (...people: TrackingPerson[]) => ({ people, waiting: people, timing: "past" as const, overdue: true });
+
+  it("counts done items and names everyone still to go once", () => {
+    const summary = summarizeRound([
+      { category: "done", tracking: { people: [kaan, ali], waiting: [], timing: "past", overdue: false } },
+      { category: "active", tracking: waitingFor(ali) },
+      { category: "active", tracking: waitingFor(kaan, ali) },
+    ]);
+    expect(summary.done).toBe(1);
+    expect(summary.total).toBe(3);
+    expect(summary.waiting.map((person) => person.id)).toEqual(["ali", "kaan"]);
+  });
+
+  it("reads as “2/2 bitti”, adding who is still to go only once the round is over", () => {
+    const done = { category: "done" as const, tracking: null };
+    const open = { category: "active" as const, tracking: waitingFor(ali) };
+    expect(describeRoundSummary(summarizeRound([done, done]), "kaan", true)).toBe("2/2 bitti");
+    expect(describeRoundSummary(summarizeRound([done, open]), "kaan", true)).toBe("1/2 bitti · bitirmeyen: Ali");
+    expect(describeRoundSummary(summarizeRound([done, open]), "ali", true)).toBe("1/2 bitti · bitirmeyen: sen");
+    expect(describeRoundSummary(summarizeRound([done, open]), "kaan", false)).toBe("1/2 bitti");
+    expect(describeRoundSummary(summarizeRound([]), "kaan", true)).toBeNull();
   });
 });

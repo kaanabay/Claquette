@@ -63,6 +63,18 @@ describe("describeActivity", () => {
     );
   });
 
+  it("says whose pick a past round's item was, and for whom", () => {
+    expect(
+      describeActivity("entry.recorded", { title: "Persona", round: "Mart 2026", picker: "Ali", recipient: "Kaan", finished: "all" }),
+    ).toBe("«Mart 2026» turuna “Persona” ekledi (Ali → Kaan) · Kaan bitirmişti");
+    expect(
+      describeActivity("entry.recorded", { title: "Dune", round: "Tur 3", picker: "Ali", recipient: null, finished: "me" }),
+    ).toBe("«Tur 3» turuna “Dune” ekledi (Ali → grup) · kendisi bitirmişti");
+    expect(
+      describeActivity("entry.recorded", { title: "Ordet", round: "Nisan 2026", picker: "Kaan", recipient: "Ali", finished: "none" }),
+    ).toBe("«Nisan 2026» turuna “Ordet” ekledi (Kaan → Ali)");
+  });
+
   it("names notes added to a board", () => {
     expect(describeActivity("board.note_added", { title: "Yönetmen havuzu" })).toBe("panoya “Yönetmen havuzu” notunu ekledi");
     expect(describeActivity("board.note_added", { title: null })).toBe("panoya not ekledi");

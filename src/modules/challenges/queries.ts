@@ -4,6 +4,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db";
 import { entries, groupMembers, groups, mediaItems, mediaTypes, roundAssignments, users, workflowStates } from "@/db/schema";
 import { isUuid } from "@/lib/utils";
+import { groupAudience, type FinishedAudience } from "@/modules/entries/labels";
 import { loadEntryCards, type EntryCard } from "@/modules/entries/queries";
 import { getMembership } from "@/modules/groups/service";
 import { listMyPicks } from "@/modules/lists/queries";
@@ -15,7 +16,9 @@ import { firstStateIn } from "@/modules/workflows/domain";
 import { getChallengeStates, listWorkflowsForGroup } from "@/modules/workflows/queries";
 import { getChallengeAccess, listParticipants } from "./context";
 import { todayIn } from "./domain/cadence";
+import { canRecordPick, parseSlotKey, type PickTiming } from "./domain/history";
 import { canAcceptSuggestion } from "./domain/plan";
+import { findPickSlot, loadHistory } from "./history";
 import { buildSlots, loadPlanRounds, loadSlotOptions, toSlotOptions, type SlotOption } from "./planning";
 import { syncRounds } from "./rounds";
 import { activeParticipantIds, currentSettings } from "./settings";
@@ -116,6 +119,13 @@ export async function getChallengePage(userId: string, challengeId: string) {
         droppedStateId: firstStateIn(states, "dropped")?.id ?? null,
       }
     : null;
+  const historyRules = strategy.history?.(config) ?? null;
+  const history = historyRules
+    ? {
+        picksPerAssignment: historyRules.picksPerAssignment,
+        rounds: await loadHistory(challenge, historyRules, roundRows, cards, participants.map((participant) => participant.userId)),
+      }
+    : null;
 
   return {
     viewerId: userId,
@@ -138,6 +148,7 @@ export async function getChallengePage(userId: string, challengeId: string) {
         }
       : null,
     plan,
+    history,
     board: states.map((state) => ({
       state,
       entries: cards.filter((card) => card.state.id === state.id && !(poolRules && isPoolCandidate(card))),
@@ -203,7 +214,25 @@ export async function getChallengeSettingsData(userId: string, challengeId: stri
   };
 }
 
-export type SuggestPageParams = { round?: string; mode?: string; media?: string };
+/** `round` + `slot` (whose pick, for whom) enter a pick afterwards, on lists with history. */
+export type SuggestPageParams = { round?: string; mode?: string; media?: string; slot?: string };
+
+/** A pick entered from the add panel (a round that is over, or on someone's behalf): the assignment, or why not. */
+export type PickTarget =
+  | {
+      ok: true;
+      timing: PickTiming;
+      roundIndex: number;
+      roundLabel: string;
+      slot: string;
+      pickerName: string;
+      pickerIsViewer: boolean;
+      recipientName: string;
+      /** Picks the assignment still takes. */
+      open: number;
+      audience: FinishedAudience;
+    }
+  | { ok: false; reason: string };
 
 export async function getSuggestPageData(userId: string, challengeId: string, params: SuggestPageParams = {}) {
   const access = await getChallengeAccess(challengeId, userId);
@@ -222,6 +251,46 @@ export async function getSuggestPageData(userId: string, challengeId: string, pa
     ? allTypes.filter((type) => challenge.mediaTypes.includes(type.slug))
     : allTypes;
   const allowedTypes = mediaTypeOptions.map((type) => type.slug);
+
+  const historyRules = strategy.history?.(config) ?? null;
+  const pickSlot = historyRules && params.slot && /^\d+$/.test(params.round ?? "") ? parseSlotKey(params.slot) : null;
+  let pick: PickTarget | null = null;
+  if (historyRules && pickSlot) {
+    const lookup =
+      challenge.status !== "active"
+        ? { ok: false as const, reason: "Liste şu an aktif değil." }
+        : await findPickSlot(db, challenge, historyRules, Number(params.round), pickSlot);
+    const allowed = lookup.ok
+      ? canRecordPick({
+          actorId: userId,
+          pickerId: pickSlot.pickerId,
+          timing: lookup.slot.timing,
+          isParticipant: access.isParticipant,
+          isAdmin: access.isAdmin,
+        })
+      : lookup;
+    const found = allowed.ok ? lookup : allowed;
+    const activeCount = participants.filter((participant) => participant.isActive).length;
+    pick = found.ok
+      ? {
+          ok: true,
+          timing: found.slot.timing,
+          roundIndex: found.slot.round.index,
+          roundLabel: found.slot.label,
+          slot: params.slot!,
+          pickerName: found.slot.pickerName,
+          pickerIsViewer: pickSlot.pickerId === userId,
+          recipientName: found.slot.recipientName ?? "Tüm grup",
+          open: found.slot.open,
+          audience:
+            pickSlot.recipientId === null
+              ? groupAudience(activeCount)
+              : pickSlot.recipientId === userId
+                ? { kind: "me" }
+                : { kind: "person", name: found.slot.recipientName ?? "?" },
+        }
+      : found;
+  }
 
   const planning = strategy.planning?.(config) ?? null;
   let plan: {
@@ -244,7 +313,7 @@ export async function getSuggestPageData(userId: string, challengeId: string, pa
 
   const [preselected, picks, existingRows] = await Promise.all([
     params.media && isUuid(params.media) ? findPick(params.media, allowedTypes) : Promise.resolve(null),
-    options.allowed ? listMyPicks(userId, allowedTypes) : Promise.resolve([]),
+    options.allowed || pick?.ok ? listMyPicks(userId, allowedTypes) : Promise.resolve([]),
     // What the list already holds (dropped items may come back), to mark search results.
     db
       .select({
@@ -270,6 +339,7 @@ export async function getSuggestPageData(userId: string, challengeId: string, pa
     roundIndex: round?.index ?? null,
     mediaTypes: mediaTypeOptions,
     plan,
+    pick,
     preselected,
     picks,
     existing: describeExisting(existingRows.map((row) => ({ ...row, href: `/entries/${row.entryId}` }))),

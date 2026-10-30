@@ -1,9 +1,11 @@
-import { ArrowRight, CircleCheck, Hourglass } from "lucide-react";
+import { ArrowRight, CircleCheck, Hourglass, UserPen } from "lucide-react";
 import Link from "next/link";
 import { Avatar } from "@/components/ui/avatar";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate, formatDateRange } from "@/lib/dates";
 import { MediaTitle } from "@/modules/media/components/media-title";
+import { canRecordPick, slotKey } from "../domain/history";
 import type { ChallengePageData } from "../queries";
 import { daysLeft, describeTimeline } from "../timeline";
 
@@ -29,6 +31,18 @@ export function RoundPanel({ data }: { data: ChallengePageData }) {
   }
 
   const remaining = daysLeft(round.endsOn, today);
+  // Group admins may enter someone else's pick for them (they said it off the app): it goes in accepted.
+  const onBehalf = (pickerId: string, picks: number) =>
+    data.history !== null &&
+    challenge.status === "active" &&
+    picks < data.history.picksPerAssignment &&
+    canRecordPick({
+      actorId: data.viewerId,
+      pickerId,
+      timing: "current",
+      isParticipant: data.access.isParticipant,
+      isAdmin: data.access.isAdmin,
+    }).ok;
   return (
     <Card>
       <CardHeader>
@@ -54,23 +68,34 @@ export function RoundPanel({ data }: { data: ChallengePageData }) {
                   <ArrowRight className="size-3.5 text-muted-foreground" />
                   <span>{assignment.recipientName ?? "Tüm grup"}</span>
                 </span>
-                {assignment.entries.length > 0 ? (
-                  <span className="flex items-center gap-1.5 text-success">
-                    <CircleCheck className="size-4 shrink-0" />
-                    {assignment.entries.map((entry, i) => (
-                      <span key={entry.id}>
-                        <Link href={`/entries/${entry.id}`} className="hover:underline">
-                          <MediaTitle media={entry.media} />
-                        </Link>
-                        {i < assignment.entries.length - 1 ? "," : ""}
-                      </span>
-                    ))}
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-1.5 text-muted-foreground">
-                    <Hourglass className="size-4" /> Öneri bekleniyor
-                  </span>
-                )}
+                <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  {assignment.entries.length > 0 ? (
+                    <span className="flex items-center gap-1.5 text-success">
+                      <CircleCheck className="size-4 shrink-0" />
+                      {assignment.entries.map((entry, i) => (
+                        <span key={entry.id}>
+                          <Link href={`/entries/${entry.id}`} className="hover:underline">
+                            <MediaTitle media={entry.media} />
+                          </Link>
+                          {i < assignment.entries.length - 1 ? "," : ""}
+                        </span>
+                      ))}
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1.5 text-muted-foreground">
+                      <Hourglass className="size-4" /> Öneri bekleniyor
+                    </span>
+                  )}
+                  {onBehalf(assignment.pickerId, assignment.entries.length) ? (
+                    <Link
+                      href={`/challenges/${challenge.id}?add=1&round=${round.index}&slot=${encodeURIComponent(slotKey(assignment))}`}
+                      title={`${assignment.pickerName} adına, kabul edilmiş olarak ekle`}
+                      className={buttonVariants({ variant: "ghost", size: "sm" })}
+                    >
+                      <UserPen /> Adına ekle
+                    </Link>
+                  ) : null}
+                </span>
               </li>
             ))}
           </ul>

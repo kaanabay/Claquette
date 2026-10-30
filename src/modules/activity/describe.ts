@@ -62,6 +62,12 @@ export function describeActivity(type: string, data: Record<string, unknown>, ha
           ? `${title} önerisini kabul edip «${String(data.round)}» turuna ekledi`
           : `${title} ögesini «${String(data.round)}» turuna ekledi`) + finishedSuffix(data.finished)
       );
+    case "entry.recorded": {
+      // A pick filled in afterwards: whose it was and for whom.
+      const recipient = typeof data.recipient === "string" ? data.recipient : null;
+      const finished = data.finished === "all" && recipient ? ` · ${recipient} bitirmişti` : finishedSuffix(data.finished);
+      return `«${String(data.round)}» turuna ${title} ekledi (${String(data.picker)} → ${recipient ?? "grup"})${finished}`;
+    }
     case "entry.moved":
       return `${title} ögesini «${String(data.round)}» turuna taşıdı${finishedSuffix(data.finished)}`;
     case "entry.unplanned":

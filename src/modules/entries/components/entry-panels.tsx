@@ -4,6 +4,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { timeAgo } from "@/lib/dates";
+import { formatShortDate } from "@/lib/short-date";
 import { dotClass } from "@/lib/tones";
 import { PlaceForm } from "@/modules/challenges/components/place-form";
 import {
@@ -15,6 +16,7 @@ import {
 } from "../actions";
 import { PROGRESS_STATUSES, progressLabel, type ProgressStatus } from "../labels";
 import type { EntryPageData } from "../queries";
+import { FinishedOnEditor } from "./finished-on-editor";
 import { NoteForm } from "./note-form";
 
 export function StateActions({
@@ -133,25 +135,28 @@ export function ProgressPanel({
 }: {
   entryId: string;
   mediaType: string;
-  mine: { status: ProgressStatus; rating: number | null } | null;
+  mine: { status: ProgressStatus; rating: number | null; completedAt: Date | null } | null;
 }) {
   return (
     <div className="flex flex-col gap-5">
-      <ActionForm action={updateProgressAction} className="flex flex-wrap gap-2">
-        <input type="hidden" name="entryId" value={entryId} />
-        {PROGRESS_STATUSES.map((status) => (
-          <SubmitButton
-            key={status}
-            name="status"
-            value={status}
-            size="sm"
-            variant={mine?.status === status ? "default" : "outline"}
-            aria-pressed={mine?.status === status}
-          >
-            {progressLabel(status, mediaType)}
-          </SubmitButton>
-        ))}
-      </ActionForm>
+      <div className="flex flex-col gap-3">
+        <ActionForm action={updateProgressAction} className="flex flex-wrap gap-2">
+          <input type="hidden" name="entryId" value={entryId} />
+          {PROGRESS_STATUSES.map((status) => (
+            <SubmitButton
+              key={status}
+              name="status"
+              value={status}
+              size="sm"
+              variant={mine?.status === status ? "default" : "outline"}
+              aria-pressed={mine?.status === status}
+            >
+              {progressLabel(status, mediaType)}
+            </SubmitButton>
+          ))}
+        </ActionForm>
+        {mine?.status === "completed" ? <FinishedOnEditor entryId={entryId} completedAt={mine.completedAt} /> : null}
+      </div>
       <div className="flex flex-col gap-2">
         <p className="text-sm font-medium">
           Puanın{" "}
@@ -194,6 +199,7 @@ export function PeopleProgress({ people, mediaType }: { people: EntryPageData["p
           </span>
           <span className="shrink-0 text-xs text-muted-foreground">
             {person.progress ? progressLabel(person.progress.status, mediaType) : "Başlamadı"}
+            {person.progress?.status === "completed" && person.progress.completedAt ? ` · ${formatShortDate(person.progress.completedAt)}` : ""}
             {person.progress?.rating ? ` · ${person.progress.rating}/10` : ""}
           </span>
         </li>

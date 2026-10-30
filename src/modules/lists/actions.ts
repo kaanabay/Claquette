@@ -4,9 +4,9 @@ import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { type ActionState, type BatchResult, batchState, toActionState, validationError, validationErrors } from "@/lib/action-state";
-import { formValues } from "@/lib/forms";
+import { daySchema, formValues } from "@/lib/forms";
 import { requireUser } from "@/modules/auth/session";
-import { fromDayValue, toDayValue } from "@/lib/short-date";
+import { fromDayValue } from "@/lib/short-date";
 import { readMediaToAdd } from "@/modules/media/input";
 import { isSortKey, type SortKey } from "@/modules/media/sort";
 import { LIST_VISIBILITIES } from "./domain";
@@ -101,14 +101,6 @@ export async function deleteListAction(_prev: ActionState, formData: FormData): 
   }
   redirect("/lists");
 }
-
-const DAY = /^\d{4}-\d{2}-\d{2}$/;
-
-/** A day in a date input: not before 1900, not after today (in Turkey). */
-const daySchema = z
-  .string()
-  .regex(DAY, "Geçerli bir tarih seç.")
-  .refine((day) => day >= "1900-01-01" && day <= toDayValue(new Date()), "Bugünden ileri bir tarih seçilemez.");
 
 const addItemSchema = z.object({
   listId: z.uuid(),
