@@ -80,8 +80,9 @@ function ChallengeFormInner({ groupId, today, members, mediaTypes, workflows, ed
   const strategy = (STRATEGIES as readonly AnyStrategy[]).find((s) => s.key === strategyKey) ?? STRATEGIES[0];
   const defaults = edit && edit.strategy === strategy.key ? { ...defaultConfig(strategy), ...edit.strategyConfig } : defaultConfig(strategy);
   const locked = edit?.locked ?? false;
-  // Only planning rules can take items before the first round starts.
-  const waitsForStart = !locked && Boolean(startsOn) && startsOn > today && !strategy.planning;
+  // Before the start, items go into the plan, a pool, or (on a calendar) the rounds ahead; an
+  // indefinite list's turns only open once it has started.
+  const waitsForStart = !locked && Boolean(startsOn) && startsOn > today && !strategy.planning && !strategy.poolRules && preset === "indefinite";
   const lockedNote = (
     <p className="flex items-start gap-2 text-xs text-muted-foreground">
       <Lock className="mt-0.5 size-3.5 shrink-0" />
@@ -205,11 +206,8 @@ function ChallengeFormInner({ groupId, today, members, mediaTypes, workflows, ed
                 />
                 <p className="text-xs text-muted-foreground">
                   Turlar bu tarihten sayılır (ör. ayın 1’i ya da bir Pazartesi).{" "}
-                  {strategy.planning
-                    ? "Geçmiş bir tarih de olur; geçmiş turları sonradan doldurursunuz."
-                    : strategy.history
-                      ? "Geçmiş bir tarih de olur; geçen turların önerilerini sonradan girersiniz. Her turda kimin kime önereceği bu tarihe ve katılımcıların sırasına göre belirlenir."
-                      : "Geçmiş bir tarih de olur."}
+                  Geçmiş bir tarih de olur; geçen turları sonradan doldurursunuz.
+                  {strategy.key === "rotation" ? " Her turda kimin kime önereceği bu tarihe ve katılımcıların sırasına göre belirlenir." : null}
                 </p>
                 <FieldError errors={errors.startsOn} />
               </div>
@@ -264,8 +262,8 @@ function ChallengeFormInner({ groupId, today, members, mediaTypes, workflows, ed
           {waitsForStart ? (
             <p className={cn("flex items-start gap-2 rounded-xl p-3 text-sm ring-1 ring-inset", toneClass("amber"))}>
               <Info className="mt-0.5 size-4 shrink-0" />
-              Liste {formatDate(startsOn)} tarihinde başlıyor. Bu kuralda o güne kadar öge eklenemez; turları önceden
-              doldurmak istiyorsan “Birlikte belirliyoruz”u seç.
+              Liste {formatDate(startsOn)} tarihinde başlıyor. Süresiz listede turlar başladıkça açılır, o güne kadar öge
+              eklenemez; turları önceden doldurmak istiyorsan bir sıklık seç.
             </p>
           ) : null}
           {/* key: remount with the new strategy's defaults when it changes */}

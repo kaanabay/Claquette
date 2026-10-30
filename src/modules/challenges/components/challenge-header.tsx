@@ -41,7 +41,7 @@ export function ChallengeHeader({
   /** Notes on the list's board ("Pano", at the bottom of the page). */
   boardCount?: number;
 }) {
-  const { challenge, access, strategy, suggestion, participants } = data;
+  const { challenge, access, strategy, suggestion, participants, addable } = data;
   const active = participants.filter((participant) => participant.isActive);
   const isActive = challenge.status === "active";
   const hidden = <input type="hidden" name="challengeId" value={challenge.id} />;
@@ -77,9 +77,9 @@ export function ChallengeHeader({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {suggestion.allowed && !adding ? (
+          {addable && !adding ? (
             <Link href={`/challenges/${challenge.id}?add=1`} className={buttonVariants()}>
-              <Plus /> {suggestion.placement === "pool" ? "Havuza ekle" : suggestion.placement === "plan" ? "Listeye ekle" : "Öneri yap"}
+              <Plus /> {strategy.key === "pool" ? "Havuza ekle" : data.plan ? "Listeye ekle" : "Öneri yap"}
             </Link>
           ) : null}
           {!access.isParticipant && challenge.status !== "archived" ? (
@@ -158,14 +158,14 @@ export function ChallengeHeader({
         </a>
       </div>
 
-      {!suggestion.allowed && access.isParticipant && isActive ? (
+      {!addable && !suggestion.allowed && access.isParticipant && isActive ? (
         <p className={cn("flex items-start gap-2 rounded-xl p-3 text-sm ring-1 ring-inset", toneClass("amber"))}>
           <Info className="mt-0.5 size-4 shrink-0" />
           {addBlockedReason({
             reason: suggestion.reason,
             today: data.today,
             startsOn: challenge.startsOn,
-            isPlanning: data.plan !== null,
+            opensEarly: data.plan !== null || challenge.cadenceUnit !== "none",
           })}
         </p>
       ) : null}

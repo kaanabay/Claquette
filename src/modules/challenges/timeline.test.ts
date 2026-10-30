@@ -4,15 +4,15 @@ import { addBlockedReason, daysLeft, endedAgo, startsIn } from "./timeline";
 describe("addBlockedReason", () => {
   const base = { reason: "Şu an aktif bir tur yok.", today: "2026-10-23", startsOn: "2027-01-01" };
 
-  it("explains that a list without planning opens with its first round", () => {
-    expect(addBlockedReason({ ...base, isPlanning: false })).toBe(
-      "Bu listenin kuralında ekleme tur sırasında yapılıyor; ilk tur 1 Ocak 2027 tarihinde başlıyor. Turları önceden doldurmak için liste “Birlikte belirliyoruz” kuralıyla kurulmalı.",
+  it("explains that an indefinite list opens with its first turn", () => {
+    expect(addBlockedReason({ ...base, opensEarly: false })).toBe(
+      "Süresiz listede turlar başladıkça açılır; ilk tur 1 Ocak 2027 tarihinde başlıyor. Turları önceden doldurmak için listeye bir sıklık ver.",
     );
   });
 
   it("keeps the strategy's own reason otherwise", () => {
-    expect(addBlockedReason({ ...base, isPlanning: true })).toBe(base.reason);
-    expect(addBlockedReason({ ...base, startsOn: "2026-10-01", isPlanning: false })).toBe(base.reason);
+    expect(addBlockedReason({ ...base, opensEarly: true })).toBe(base.reason);
+    expect(addBlockedReason({ ...base, startsOn: "2026-10-01", opensEarly: false })).toBe(base.reason);
   });
 });
 

@@ -5,6 +5,7 @@ import { challengeParticipants, challenges, groupMembers, groups, users } from "
 import { AppError } from "@/lib/action-state";
 import { logActivity } from "@/modules/activity/service";
 import { isSiteAdmin } from "@/modules/admin/access";
+import { replanUpcomingRounds } from "@/modules/challenges/rounds";
 import { settleEntries } from "@/modules/entries/settle";
 import { canManageMember } from "./domain";
 
@@ -155,5 +156,8 @@ export async function removeMember(userId: string, groupId: string, memberId: st
     }
     await logActivity(tx, { groupId, actorId: userId, type: "member.removed", data: { name: member.name } });
   });
-  for (const listId of listIds) await settleEntries(listId);
+  for (const listId of listIds) {
+    await settleEntries(listId);
+    await replanUpcomingRounds(listId);
+  }
 }

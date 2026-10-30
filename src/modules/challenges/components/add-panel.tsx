@@ -4,26 +4,32 @@ import { buttonVariants } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/misc";
 import { SuggestForm } from "@/modules/media/components/suggest-form";
 import type { SuggestPageData, SuggestPageParams } from "../queries";
+import { AddContextBar } from "./add-context";
 import { ScrollIntoView } from "./scroll-into-view";
 
 /**
- * Adding happens on the list's own page (`?add=1`, with the same `round`, `mode`, `media` and
- * `slot` parameters the plan's and the rounds' links use), so the list stays in sight and there
- * is nothing to go back to.
+ * Adding happens on the list's own page (`?add=1`, with the same `round`, `mode`, `media` and `as`
+ * parameters the plan's and the rounds' links use), so the list stays in sight and there is nothing
+ * to go back to.
  */
 export function AddPanel({ data, link, closeHref }: { data: SuggestPageData; link: SuggestPageParams; closeHref: string }) {
-  const { options, pick } = data;
-  const placement = options.allowed ? options.placement : null;
-  const title = pick
-    ? pick.ok && pick.timing === "current"
-      ? "Adına ekle"
-      : "Geçmişi doldur"
-    : placement === "plan"
+  const { options, context } = data;
+  const { round, credited } = context;
+  const onBehalf = !credited.isViewer;
+  const title =
+    context.kind === "plan"
       ? "Listeye ekle"
-      : placement === "pool"
-        ? "Havuza aday ekle"
-        : "Öneri yap";
-  const linkKey = [link.round, link.mode, link.media, link.slot].join(":");
+      : round?.timing === "past"
+        ? "Geçmişi doldur"
+        : onBehalf
+          ? "Adına ekle"
+          : context.kind === "pool"
+            ? round
+              ? "Tura ekle"
+              : "Havuza aday ekle"
+            : "Öneri yap";
+  const where = [round ? `«${round.label}» turu` : null, onBehalf ? `${credited.name} adına` : null].filter(Boolean).join(" · ");
+  const linkKey = [link.round, link.mode, link.media, link.as].join(":");
 
   return (
     <ScrollIntoView scrollKey={linkKey}>
@@ -31,11 +37,8 @@ export function AddPanel({ data, link, closeHref }: { data: SuggestPageData; lin
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
-            {pick?.ok ? (
-              <p className="text-sm text-muted-foreground">
-                «{pick.roundLabel}» turu · {pick.pickerName} → {pick.recipientName}
-              </p>
-            ) : !pick && options.allowed && options.remaining !== null ? (
+            {where ? <p className="text-sm text-muted-foreground">{where}</p> : null}
+            {!onBehalf && round?.timing !== "past" && options.allowed && options.remaining !== null && context.kind === "rounds" ? (
               <p className="text-sm text-muted-foreground">{options.remaining} öneri hakkın var</p>
             ) : null}
           </div>
@@ -43,34 +46,17 @@ export function AddPanel({ data, link, closeHref }: { data: SuggestPageData; lin
             <X />
           </Link>
         </div>
-        {pick ? (
-          pick.ok ? (
-            <SuggestForm
-              key={linkKey}
-              challengeId={data.challenge.id}
-              mediaTypes={data.mediaTypes}
-              targets={[]}
-              placement="round"
-              pick={pick}
-              picks={data.picks}
-              existing={data.existing}
-              maxItems={pick.open}
-              autoFocus
-            />
-          ) : (
-            <EmptyState icon={<Hourglass />} title="Bu öneri eklenemiyor">
-              {pick.reason}
-            </EmptyState>
-          )
-        ) : options.allowed ? (
+        <AddContextBar rounds={context.rounds} people={context.people} />
+        {options.allowed ? (
           <SuggestForm
-            // A link with another round/mode/item starts a fresh form; a refresh after a partial add keeps it.
+            // Another round, mode, item or person starts a fresh form; a refresh after a partial add keeps it.
             key={linkKey}
             challengeId={data.challenge.id}
             mediaTypes={data.mediaTypes}
             targets={data.targets}
             placement={options.placement}
             plan={data.plan}
+            context={context}
             picks={data.picks}
             preselected={data.preselected}
             existing={data.existing}
@@ -78,7 +64,7 @@ export function AddPanel({ data, link, closeHref }: { data: SuggestPageData; lin
             autoFocus
           />
         ) : (
-          <EmptyState icon={<Hourglass />} title="Şu an ekleyemezsin">
+          <EmptyState icon={<Hourglass />} title={onBehalf ? `${credited.name} adına eklenemiyor` : "Şu an ekleyemezsin"}>
             {options.reason}
           </EmptyState>
         )}

@@ -22,6 +22,7 @@ import { lastRoundIndex } from "./domain/plan";
 import { confirmationKey, planSettingsChange, type ChallengeSettings, type SettingsChange, type SettingsFacts } from "./domain/settings";
 import { getStrategy, parseStoredConfig, STRATEGIES } from "./domain/strategies";
 import { roundLabel } from "./planning";
+import { replanUpcomingRounds } from "./rounds";
 
 // Editing a list in use. Planning happens inside the transaction, with the list locked like an
 // addition locks it, so the consequences shown are the ones applied (see domain/settings.ts).
@@ -250,7 +251,8 @@ export async function updateChallengeSettings(
     return { status: "saved" };
   });
 
-  // Items everyone still taking part has finished are done now.
+  // Items everyone still taking part has finished are done now; rounds ahead follow the new settings.
   if (outcome.status === "saved" && left.length > 0) await settleEntries(challengeId);
+  if (outcome.status === "saved") await replanUpcomingRounds(challengeId);
   return outcome;
 }

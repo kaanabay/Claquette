@@ -5,7 +5,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate, formatDateRange } from "@/lib/dates";
 import { MediaTitle } from "@/modules/media/components/media-title";
-import { canRecordPick, slotKey } from "../domain/history";
+import { slotKey } from "../domain/additions";
 import type { ChallengePageData } from "../queries";
 import { daysLeft, describeTimeline } from "../timeline";
 
@@ -31,20 +31,11 @@ export function RoundPanel({ data }: { data: ChallengePageData }) {
   }
 
   const remaining = daysLeft(round.endsOn, today);
-  // Group admins may enter someone else's pick for them (they said it off the app): it goes in accepted.
-  const onBehalf = (pickerId: string, picks: number) =>
-    data.history !== null &&
-    challenge.status === "active" &&
-    picks < data.history.picksPerAssignment &&
-    canRecordPick({
-      actorId: data.viewerId,
-      pickerId,
-      timing: "current",
-      isParticipant: data.access.isParticipant,
-      isAdmin: data.access.isAdmin,
-    }).ok;
+  // Group admins may add someone else's pick for them (said off the app): it goes in accepted.
+  const onBehalf = (assignment: { pickerId: string; recipientId: string | null }) =>
+    data.timeline?.current?.slots.find((slot) => slot.key === slotKey(assignment))?.add === "behalf";
   return (
-    <Card>
+    <Card role="region" aria-label="Şu anki tur">
       <CardHeader>
         <CardTitle>Tur {round.index + 1}</CardTitle>
         <CardDescription>
@@ -86,9 +77,9 @@ export function RoundPanel({ data }: { data: ChallengePageData }) {
                       <Hourglass className="size-4" /> Öneri bekleniyor
                     </span>
                   )}
-                  {onBehalf(assignment.pickerId, assignment.entries.length) ? (
+                  {onBehalf(assignment) ? (
                     <Link
-                      href={`/challenges/${challenge.id}?add=1&round=${round.index}&slot=${encodeURIComponent(slotKey(assignment))}`}
+                      href={`/challenges/${challenge.id}?add=1&round=${round.index}&as=${assignment.pickerId}`}
                       title={`${assignment.pickerName} adına, kabul edilmiş olarak ekle`}
                       className={buttonVariants({ variant: "ghost", size: "sm" })}
                     >

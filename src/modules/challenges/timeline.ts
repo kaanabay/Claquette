@@ -23,12 +23,13 @@ export function describeTimeline(challenge: TimelineInput, today: string): strin
 }
 
 /**
- * Why the user can't add to the list right now, for the list page. Rules that only fill a running
- * round can't take anything before the first one starts, so say when that is and how to plan ahead.
+ * Why the user can't add to the list right now, for the list page. An indefinite list's turns open
+ * only once it starts (`opensEarly`: planning, or rounds on a calendar, take items before), so say
+ * when that is and how to plan ahead.
  */
-export function addBlockedReason(input: { reason: string; today: string; startsOn: string; isPlanning: boolean }): string {
-  if (!input.isPlanning && input.today < input.startsOn) {
-    return `Bu listenin kuralında ekleme tur sırasında yapılıyor; ilk tur ${formatDate(input.startsOn)} tarihinde başlıyor. Turları önceden doldurmak için liste “Birlikte belirliyoruz” kuralıyla kurulmalı.`;
+export function addBlockedReason(input: { reason: string; today: string; startsOn: string; opensEarly: boolean }): string {
+  if (!input.opensEarly && input.today < input.startsOn) {
+    return `Süresiz listede turlar başladıkça açılır; ilk tur ${formatDate(input.startsOn)} tarihinde başlıyor. Turları önceden doldurmak için listeye bir sıklık ver.`;
   }
   return input.reason;
 }

@@ -6,6 +6,7 @@ import { entries, groupMembers, groups, mediaItems, mediaTypes, roundAssignments
 import { isUuid } from "@/lib/utils";
 import { groupAudience, type FinishedAudience } from "@/modules/entries/labels";
 import { loadEntryCards, type EntryCard } from "@/modules/entries/queries";
+import type { RoundTiming } from "@/modules/entries/tracking";
 import { getMembership } from "@/modules/groups/service";
 import { listMyPicks } from "@/modules/lists/queries";
 import { titleColumns } from "@/modules/media/columns";
@@ -16,13 +17,14 @@ import { firstStateIn } from "@/modules/workflows/domain";
 import { getChallengeStates, listWorkflowsForGroup } from "@/modules/workflows/queries";
 import { getChallengeAccess, listParticipants } from "./context";
 import { todayIn } from "./domain/cadence";
-import { canRecordPick, parseSlotKey, type PickTiming } from "./domain/history";
-import { canAcceptSuggestion } from "./domain/plan";
-import { findPickSlot, loadHistory } from "./history";
+import { canAddAs } from "./domain/additions";
+import { canAcceptSuggestion, describeSlotOption } from "./domain/plan";
+import type { SuggestionOptions } from "./domain/strategies";
 import { buildSlots, loadPlanRounds, loadSlotOptions, toSlotOptions, type SlotOption } from "./planning";
 import { syncRounds } from "./rounds";
 import { activeParticipantIds, currentSettings } from "./settings";
 import { getSuggestionState } from "./suggestions";
+import { checkTarget, findCurrentRound, findRound, loadTimeline, selectableRounds, type RoundRef } from "./targets";
 
 const picker = alias(users, "picker");
 const assignee = alias(users, "assignee");
@@ -119,13 +121,15 @@ export async function getChallengePage(userId: string, challengeId: string) {
         droppedStateId: firstStateIn(states, "dropped")?.id ?? null,
       }
     : null;
-  const historyRules = strategy.history?.(config) ?? null;
-  const history = historyRules
-    ? {
-        picksPerAssignment: historyRules.picksPerAssignment,
-        rounds: await loadHistory(challenge, historyRules, roundRows, cards, participants.map((participant) => participant.userId)),
-      }
-    : null;
+  // Lists without planning: their rounds around the current one, and what the viewer may add there.
+  const timeline = planning
+    ? null
+    : await loadTimeline(challenge, {
+        roundRows,
+        cards,
+        participants,
+        viewer: { id: userId, isParticipant: access.isParticipant, isAdmin: access.isAdmin },
+      });
 
   return {
     viewerId: userId,
@@ -133,6 +137,8 @@ export async function getChallengePage(userId: string, challengeId: string) {
     challenge,
     strategy: { key: strategy.key, label: strategy.label, summary: strategy.summary, description: strategy.describeConfig(config) },
     suggestion: suggestion.options,
+    // Something can be added now: here and now by the list's rule, or into a round ahead.
+    addable: suggestion.options.allowed || Boolean(timeline?.upcoming.some((view) => view.canAdd)),
     round,
     roundEntries: roundCards.filter(inPlay),
     // Started rounds only (planning may create future ones early), newest first.
@@ -148,7 +154,7 @@ export async function getChallengePage(userId: string, challengeId: string) {
         }
       : null,
     plan,
-    history,
+    timeline,
     board: states.map((state) => ({
       state,
       entries: cards.filter((card) => card.state.id === state.id && !(poolRules && isPoolCandidate(card))),
@@ -214,25 +220,23 @@ export async function getChallengeSettingsData(userId: string, challengeId: stri
   };
 }
 
-/** `round` + `slot` (whose pick, for whom) enter a pick afterwards, on lists with history. */
-export type SuggestPageParams = { round?: string; mode?: string; media?: string; slot?: string };
+/** `round`: a round other than the current one (lists without planning); `as`: whom to add for (group admins). */
+export type SuggestPageParams = { round?: string; mode?: string; media?: string; as?: string };
 
-/** A pick entered from the add panel (a round that is over, or on someone's behalf): the assignment, or why not. */
-export type PickTarget =
-  | {
-      ok: true;
-      timing: PickTiming;
-      roundIndex: number;
-      roundLabel: string;
-      slot: string;
-      pickerName: string;
-      pickerIsViewer: boolean;
-      recipientName: string;
-      /** Picks the assignment still takes. */
-      open: number;
-      audience: FinishedAudience;
-    }
-  | { ok: false; reason: string };
+/** Where an addition goes and whose it is, as the add panel shows (and switches) them. */
+export type AddContext = {
+  /** Planning lists choose a round in the form; pool lists add to the pool unless a round is named. */
+  kind: "plan" | "pool" | "rounds";
+  /** The round it goes into (lists without planning); null for a pool, or when no round runs. */
+  round: { index: number; label: string; timing: RoundTiming } | null;
+  credited: { id: string; name: string; isViewer: boolean };
+  /** For a round that is over: how "who finished it?" asks about each possible recipient. */
+  audiences: { recipientId: string | null; audience: FinishedAudience }[];
+  /** Rounds to switch to (lists without planning), each with its link. */
+  rounds: { key: string; label: string; timing: RoundTiming | "pool"; href: string; selected: boolean }[];
+  /** Group admins: the people to add for, each with its link. */
+  people: { id: string; name: string; href: string; selected: boolean }[];
+};
 
 export async function getSuggestPageData(userId: string, challengeId: string, params: SuggestPageParams = {}) {
   const access = await getChallengeAccess(challengeId, userId);
@@ -240,7 +244,7 @@ export async function getSuggestPageData(userId: string, challengeId: string, pa
   const { challenge } = access;
 
   await syncRounds([challenge]);
-  const [{ options, round, strategy, config }, participants, allTypes] = await Promise.all([
+  const [{ strategy, config }, participants, allTypes] = await Promise.all([
     getSuggestionState(challenge, userId),
     listParticipants(challengeId),
     listMediaTypes(),
@@ -251,48 +255,117 @@ export async function getSuggestPageData(userId: string, challengeId: string, pa
     ? allTypes.filter((type) => challenge.mediaTypes.includes(type.slug))
     : allTypes;
   const allowedTypes = mediaTypeOptions.map((type) => type.slug);
+  const active = participants.filter((participant) => participant.isActive);
 
-  const historyRules = strategy.history?.(config) ?? null;
-  const pickSlot = historyRules && params.slot && /^\d+$/.test(params.round ?? "") ? parseSlotKey(params.slot) : null;
-  let pick: PickTarget | null = null;
-  if (historyRules && pickSlot) {
-    const lookup =
-      challenge.status !== "active"
-        ? { ok: false as const, reason: "Liste şu an aktif değil." }
-        : await findPickSlot(db, challenge, historyRules, Number(params.round), pickSlot);
-    const allowed = lookup.ok
-      ? canRecordPick({
-          actorId: userId,
-          pickerId: pickSlot.pickerId,
-          timing: lookup.slot.timing,
-          isParticipant: access.isParticipant,
-          isAdmin: access.isAdmin,
-        })
-      : lookup;
-    const found = allowed.ok ? lookup : allowed;
-    const activeCount = participants.filter((participant) => participant.isActive).length;
-    pick = found.ok
-      ? {
-          ok: true,
-          timing: found.slot.timing,
-          roundIndex: found.slot.round.index,
-          roundLabel: found.slot.label,
-          slot: params.slot!,
-          pickerName: found.slot.pickerName,
-          pickerIsViewer: pickSlot.pickerId === userId,
-          recipientName: found.slot.recipientName ?? "Tüm grup",
-          open: found.slot.open,
-          audience:
-            pickSlot.recipientId === null
-              ? groupAudience(activeCount)
-              : pickSlot.recipientId === userId
-                ? { kind: "me" }
-                : { kind: "person", name: found.slot.recipientName ?? "?" },
+  // Whose item it is: group admins may pick another participant.
+  const creditedId = access.isAdmin && params.as && active.some((participant) => participant.userId === params.as) ? params.as : userId;
+  const planningRules = strategy.planning?.(config) ?? null;
+  const poolList = Boolean(strategy.poolRules?.(config));
+  const may = canAddAs({
+    actorId: userId,
+    creditedId,
+    actorIsParticipant: access.isParticipant,
+    creditedIsParticipant: active.some((participant) => participant.userId === creditedId),
+    isAdmin: access.isAdmin,
+  });
+  // Links that switch the panel's round or person and keep the rest (a planning list keeps its round and mode).
+  const link = (round: number | null, as: string) => {
+    const query = new URLSearchParams({ add: "1" });
+    const keptRound = round !== null ? String(round) : planningRules ? (params.round ?? null) : null;
+    if (keptRound !== null) query.set("round", keptRound);
+    if (planningRules && params.mode) query.set("mode", params.mode);
+    if (as !== userId) query.set("as", as);
+    if (params.media) query.set("media", params.media);
+    return `/challenges/${challenge.id}?${query}`;
+  };
+
+  // Where it goes: planning lists choose in the form; elsewhere the named round, else the current one
+  // (a pool list's pool), else the first round ahead that takes something from this person.
+  const blocked: SuggestionOptions | null =
+    challenge.status !== "active"
+      ? { allowed: false, reason: "Liste şu an aktif değil." }
+      : !may.ok
+        ? { allowed: false, reason: may.reason }
+        : null;
+  let target: RoundRef | null = null;
+  let rounds: AddContext["rounds"] = [];
+  let options: SuggestionOptions;
+  if (planningRules) {
+    options = blocked ?? (await getSuggestionState(challenge, creditedId)).options;
+  } else {
+    const [roundRows, filled] = await Promise.all([
+      loadPlanRounds(challengeId),
+      db
+        .select({ roundId: entries.roundId, total: count() })
+        .from(entries)
+        .innerJoin(workflowStates, eq(workflowStates.id, entries.stateId))
+        .where(and(eq(entries.challengeId, challengeId), ne(workflowStates.category, "dropped")))
+        .groupBy(entries.roundId),
+    ]);
+    const filledByRound = new Map(filled.flatMap((row) => (row.roundId ? [[row.roundId, row.total] as const] : [])));
+    const choices = selectableRounds(challenge, roundRows, filledByRound);
+    const requested = /^\d+$/.test(params.round ?? "") ? Number(params.round) : null;
+    let missing = false;
+    if (requested !== null) {
+      target = await findRound(db, challenge, requested);
+      missing = target === null;
+    } else if (!poolList) {
+      target = await findCurrentRound(challenge);
+      if (!blocked && !(await checkTarget(db, challenge, creditedId, target)).allowed) {
+        for (const choice of choices.filter((choice) => choice.timing === "future")) {
+          if ((await checkTarget(db, challenge, creditedId, choice)).allowed) {
+            target = choice;
+            break;
+          }
         }
-      : found;
+      }
+    }
+    options = blocked ?? (missing ? { allowed: false, reason: "Bu tur bulunamadı." } : await checkTarget(db, challenge, creditedId, target));
+
+    const ordered = [
+      ...choices.filter((choice) => choice.timing === "current"),
+      ...choices.filter((choice) => choice.timing === "future"),
+      ...choices.filter((choice) => choice.timing === "past").reverse(),
+    ];
+    rounds = [
+      ...(poolList ? [{ key: "pool", label: "Havuz (tur seçimi kurallara göre)", timing: "pool" as const, href: link(null, creditedId), selected: target === null }] : []),
+      ...ordered.map((choice) => ({
+        key: String(choice.index),
+        label: describeSlotOption({ label: choice.label, timing: choice.timing, isFull: false }),
+        timing: choice.timing,
+        href: link(choice.timing === "current" && !poolList ? null : choice.index, creditedId),
+        selected: target?.index === choice.index,
+      })),
+    ];
   }
 
-  const planning = strategy.planning?.(config) ?? null;
+  const context: AddContext = {
+    kind: planningRules ? "plan" : poolList ? "pool" : "rounds",
+    round: target ? { index: target.index, label: target.label, timing: target.timing } : null,
+    credited: { id: creditedId, name: names.get(creditedId) ?? "?", isViewer: creditedId === userId },
+    audiences: (options.allowed ? options.targets : []).map((recipientId) => ({
+      recipientId,
+      audience:
+        recipientId === null
+          ? groupAudience(active.length)
+          : recipientId === userId
+            ? { kind: "me" }
+            : { kind: "person", name: names.get(recipientId) ?? "?" },
+    })),
+    rounds,
+    people: access.isAdmin
+      ? [...active]
+          .sort((a, b) => Number(b.userId === userId) - Number(a.userId === userId))
+          .map((participant) => ({
+            id: participant.userId,
+            name: participant.userId === userId ? `${participant.name} (sen)` : participant.name,
+            href: link(target && !(target.timing === "current" && !poolList) ? target.index : null, participant.userId),
+            selected: participant.userId === creditedId,
+          }))
+      : [],
+  };
+
+  const planning = planningRules;
   let plan: {
     options: SlotOption[];
     defaultIndex: number | null;
@@ -313,7 +386,7 @@ export async function getSuggestPageData(userId: string, challengeId: string, pa
 
   const [preselected, picks, existingRows] = await Promise.all([
     params.media && isUuid(params.media) ? findPick(params.media, allowedTypes) : Promise.resolve(null),
-    options.allowed || pick?.ok ? listMyPicks(userId, allowedTypes) : Promise.resolve([]),
+    options.allowed ? listMyPicks(userId, allowedTypes) : Promise.resolve([]),
     // What the list already holds (dropped items may come back), to mark search results.
     db
       .select({
@@ -336,10 +409,9 @@ export async function getSuggestPageData(userId: string, challengeId: string, pa
     targets: options.allowed
       ? options.targets.map((id) => ({ id, name: id ? (names.get(id) ?? "?") : "Tüm grup" }))
       : [],
-    roundIndex: round?.index ?? null,
     mediaTypes: mediaTypeOptions,
     plan,
-    pick,
+    context,
     preselected,
     picks,
     existing: describeExisting(existingRows.map((row) => ({ ...row, href: `/entries/${row.entryId}` }))),

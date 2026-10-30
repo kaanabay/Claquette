@@ -11,7 +11,7 @@ import { requireChallengeAccess } from "./context";
 import type { CadenceUnit } from "./domain/cadence";
 import { getStrategy, parseStoredConfig } from "./domain/strategies";
 import { drawForRound, selectIntoRound } from "./pool";
-import { getCurrentRound, startNextTurn } from "./rounds";
+import { getCurrentRound, replanUpcomingRounds, startNextTurn } from "./rounds";
 
 export type CreateChallengeInput = {
   groupId: string;
@@ -125,6 +125,7 @@ export async function joinChallenge(userId: string, challengeId: string): Promis
       });
     await logActivity(tx, { groupId: challenge.groupId, challengeId, actorId: userId, type: "challenge.joined" });
   });
+  await replanUpcomingRounds(challengeId);
 }
 
 export async function leaveChallenge(userId: string, challengeId: string): Promise<void> {
@@ -137,6 +138,7 @@ export async function leaveChallenge(userId: string, challengeId: string): Promi
   await logActivity(db, { groupId: challenge.groupId, challengeId, actorId: userId, type: "challenge.left" });
   // Items everyone still taking part has finished are done now.
   await settleEntries(challengeId);
+  await replanUpcomingRounds(challengeId);
 }
 
 export async function setChallengeStatus(

@@ -1,7 +1,7 @@
 import "server-only";
-import { and, asc, desc, eq, inArray, max } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, max } from "drizzle-orm";
 import { db, type Executor, type Transaction } from "@/db";
-import { challengeParticipants, roundAssignments, rounds } from "@/db/schema";
+import { challengeParticipants, challenges, groups, roundAssignments, rounds } from "@/db/schema";
 import { logActivity } from "@/modules/activity/service";
 import { isTimeBased, periodAt, periodIndexAt, todayIn, type Cadence, type Period } from "./domain/cadence";
 import { getStrategy, parseStoredConfig, type Participant } from "./domain/strategies";
@@ -102,6 +102,37 @@ export async function createRoundsThrough(tx: Transaction, challenge: RoundsChal
     .from(rounds)
     .where(eq(rounds.challengeId, challenge.id));
   await insertRoundsTx(tx, challenge, periodsBetween(challenge, (maxIndex ?? -1) + 1, index));
+}
+
+/**
+ * Rounds that haven't started yet (created early when something was added ahead) follow the
+ * participants and options as they are now: their assignments are drawn again after a change.
+ */
+export async function replanUpcomingRounds(challengeId: string): Promise<void> {
+  const [challenge] = await db
+    .select({ strategy: challenges.strategy, strategyConfig: challenges.strategyConfig, timezone: groups.timezone })
+    .from(challenges)
+    .innerJoin(groups, eq(groups.id, challenges.groupId))
+    .where(eq(challenges.id, challengeId))
+    .limit(1);
+  if (!challenge) return;
+  const strategy = getStrategy(challenge.strategy);
+  const config = parseStoredConfig(strategy, challenge.strategyConfig);
+  await db.transaction(async (tx) => {
+    const upcoming = await tx
+      .select({ id: rounds.id, index: rounds.index })
+      .from(rounds)
+      .where(and(eq(rounds.challengeId, challengeId), gt(rounds.startsOn, todayIn(challenge.timezone))));
+    if (upcoming.length === 0) return;
+    const participants = await activeParticipants(challengeId, tx);
+    await tx.delete(roundAssignments).where(inArray(roundAssignments.roundId, upcoming.map((round) => round.id)));
+    const assignments = upcoming.flatMap((round) =>
+      strategy
+        .planRound({ config, roundIndex: round.index, participants })
+        .map((plan) => ({ roundId: round.id, pickerId: plan.pickerId, recipientId: plan.recipientId })),
+    );
+    if (assignments.length > 0) await tx.insert(roundAssignments).values(assignments);
+  });
 }
 
 /** Brings the rounds of the given challenges up to date (one query when nothing is missing). */

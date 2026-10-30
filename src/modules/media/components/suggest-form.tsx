@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, CalendarCheck, Lightbulb, Send } from "lucide-react";
+import { CalendarCheck, Lightbulb, Send } from "lucide-react";
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label, NativeSelect, Textarea } from "@/components/ui/fields";
@@ -33,16 +33,16 @@ type Props = {
     capacity: number | null;
     participantCount: number;
   } | null;
-  /** A pick entered afterwards or on someone's behalf (lists with history): whose, for whom, when. */
-  pick?: {
-    timing: "past" | "current";
-    roundIndex: number;
-    roundLabel: string;
-    slot: string;
-    pickerName: string;
-    pickerIsViewer: boolean;
-    recipientName: string;
-    audience: FinishedAudience;
+  /**
+   * Where it goes and whose it is: a round of a list without planning (past, current or ahead; none
+   * for a pool), and the person it is credited to when a group admin adds for someone else.
+   */
+  context?: {
+    kind: "plan" | "pool" | "rounds";
+    round: { index: number; label: string; timing: "past" | "current" | "future" } | null;
+    credited: { id: string; name: string; isViewer: boolean };
+    /** For a round that is over: how "who finished it?" asks about each possible recipient. */
+    audiences: { recipientId: string | null; audience: FinishedAudience }[];
   } | null;
   picks?: CatalogPick[];
   preselected?: CatalogPick | null;
@@ -72,6 +72,7 @@ const SUBMIT_LABELS = {
   round: ["Öneriyi gönder", "öneriyi gönder"],
   past: ["Geçmişe ekle", "ögeyi geçmişe ekle"],
   behalf: ["Adına ekle", "ögeyi adına ekle"],
+  poolRound: ["Tura ekle", "ögeyi tura ekle"],
 } as const;
 
 function SuggestFormInner({
@@ -80,7 +81,7 @@ function SuggestFormInner({
   targets,
   placement,
   plan,
-  pick = null,
+  context = null,
   picks,
   preselected,
   existing,
@@ -97,6 +98,7 @@ function SuggestFormInner({
   const [handled, setHandled] = useState(state);
   const [planMode, setPlanMode] = useState<"plan" | "suggest">(plan?.defaultMode ?? "suggest");
   const [roundIndex, setRoundIndex] = useState<string>(plan?.defaultIndex !== null && plan?.defaultIndex !== undefined ? String(plan.defaultIndex) : "");
+  const [recipientId, setRecipientId] = useState(targets[0]?.id ?? "");
 
   // Rounds filled up meanwhile (e.g. by the part of a batch that went in): move on to a free one,
   // since a disabled option isn't submitted.
@@ -126,22 +128,38 @@ function SuggestFormInner({
   const chosen = planning?.options.find((option) => String(option.index) === roundIndex);
   const intoPlan = planning !== null && planMode === "plan";
   const count = picked.length + (manualFilled ? 1 : 0);
-  const past = pick?.timing === "past";
-  const [one, many] = SUBMIT_LABELS[pick ? (past ? "past" : "behalf") : isPlan ? (intoPlan ? "plan" : "suggest") : placement];
-  const pickerFirstName = pick?.pickerName.split(" ")[0];
-  const question = pick
-    ? pick.pickerIsViewer
-      ? "Ne önermiştin?"
-      : past
-        ? `${pickerFirstName} ne önermişti?`
-        : `${pickerFirstName} ne önerdi?`
-    : isPlan
-      ? "Ne ekliyorsun?"
-      : "Ne öneriyorsun?";
+  // A round of a list without planning (or a pool round), and whose item it is.
+  const round = !isPlan && placement === "round" ? (context?.round ?? null) : null;
+  const past = round?.timing === "past";
+  const poolRound = context?.kind === "pool" && round !== null;
+  const onBehalf = context ? !context.credited.isViewer : false;
+  const who = onBehalf ? context?.credited.name.split(" ")[0] : null;
+  const [one, many] = SUBMIT_LABELS[
+    isPlan ? (intoPlan ? "plan" : "suggest") : past ? "past" : onBehalf ? "behalf" : poolRound ? "poolRound" : placement
+  ];
+  const question = isPlan
+    ? who
+      ? `${who} adına ne ekliyorsun?`
+      : "Ne ekliyorsun?"
+    : past
+      ? poolRound
+        ? "Bu turda ne seçilmişti?"
+        : who
+          ? `${who} ne önermişti?`
+          : "Ne önermiştin?"
+      : who
+        ? `${who} ne önerdi?`
+        : poolRound
+          ? "Bu tura ne giriyor?"
+          : "Ne öneriyorsun?";
+  const audience =
+    context?.audiences.find((choice) => (choice.recipientId ?? "") === (recipientId ?? ""))?.audience ?? { kind: "group" as const };
 
   return (
     <form {...formProps} className="flex flex-col gap-6">
       <input type="hidden" name="challengeId" value={challengeId} />
+      {round ? <input type="hidden" name="targetRound" value={round.index} /> : null}
+      {onBehalf && context ? <input type="hidden" name="onBehalfOf" value={context.credited.id} /> : null}
 
       <Card>
         <CardHeader>
@@ -166,28 +184,22 @@ function SuggestFormInner({
         </CardContent>
       </Card>
 
-      {pick ? (
+      {round ? (
         <Card>
           <CardHeader>
-            <CardTitle>«{pick.roundLabel}» turu</CardTitle>
+            <CardTitle>«{round.label}» turu</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
-            <input type="hidden" name="pickRound" value={pick.roundIndex} />
-            <input type="hidden" name="pickSlot" value={pick.slot} />
-            <p className="flex flex-wrap items-center gap-1.5 text-sm">
-              <span className="font-medium">{pick.pickerName}</span>
-              <ArrowRight className="size-3.5 text-muted-foreground" />
-              <span className="font-medium">{pick.recipientName}</span>
-            </p>
-            {pick.pickerIsViewer ? null : (
+            <RecipientField targets={targets} value={recipientId ?? ""} onChange={setRecipientId} poolRound={poolRound} />
+            {onBehalf && context ? (
               <p className="-mt-2 text-xs text-muted-foreground">
                 {past
-                  ? `Öge, o turda öneren ${pick.pickerName} adına yazılır.`
-                  : `Öge, ${pick.pickerName} adına ve kabul edilmiş olarak girer.`}
+                  ? `Öge ${context.credited.name} adına yazılır.`
+                  : `Öge ${context.credited.name} adına ve kabul edilmiş olarak girer.`}
               </p>
-            )}
-            {past ? <FinishedField audience={pick.audience} /> : null}
-            <PitchField intoPlan errors={errors.pitch} many={count > 1} />
+            ) : null}
+            {past ? <FinishedField key={recipientId ?? ""} audience={audience} /> : null}
+            <PitchField intoPlan={past || onBehalf || poolRound} errors={errors.pitch} many={count > 1} />
           </CardContent>
         </Card>
       ) : isPlan ? (
@@ -198,6 +210,9 @@ function SuggestFormInner({
           <CardContent className="flex flex-col gap-4">
             <input type="hidden" name="recipientId" value="" />
             <input type="hidden" name="planMode" value={intoPlan ? "plan" : "suggest"} />
+            {onBehalf && context ? (
+              <p className="text-xs text-muted-foreground">Öge {context.credited.name} adına girer; kimin girdiği akışta yazar.</p>
+            ) : null}
             <div className="flex flex-col gap-2 sm:flex-row" role="radiogroup" aria-label="Ekleme şekli">
               {planning && planning.options.length > 0 ? (
                 <label className={pill}>
@@ -275,29 +290,11 @@ function SuggestFormInner({
             {placement === "pool" ? (
               <p className="text-sm text-muted-foreground">Öneri ortak havuza girer; tur seçimi kurallara göre yapılır.</p>
             ) : null}
-            {targets.length === 1 ? (
-              <>
-                <input type="hidden" name="recipientId" value={targets[0].id ?? ""} />
-                {placement !== "pool" ? (
-                  <p className="text-sm">
-                    Alıcı: <span className="font-medium">{targets[0].name}</span>
-                  </p>
-                ) : null}
-              </>
-            ) : (
-              <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Alıcı">
-                {targets.map((target, index) => (
-                  <label
-                    key={target.id ?? "group"}
-                    className="flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm has-[:checked]:border-primary has-[:checked]:bg-accent"
-                  >
-                    <input type="radio" name="recipientId" value={target.id ?? ""} defaultChecked={index === 0} className="accent-primary" />
-                    {target.name}
-                  </label>
-                ))}
-              </div>
-            )}
-            <PitchField intoPlan={false} errors={errors.pitch} many={count > 1} />
+            <RecipientField targets={targets} value={recipientId ?? ""} onChange={setRecipientId} poolRound={placement === "pool"} />
+            {onBehalf && context ? (
+              <p className="-mt-2 text-xs text-muted-foreground">Öge {context.credited.name} adına girer.</p>
+            ) : null}
+            <PitchField intoPlan={onBehalf} errors={errors.pitch} many={count > 1} />
           </CardContent>
         </Card>
       )}
@@ -315,6 +312,52 @@ function SuggestFormInner({
         </SubmitButton>
       </div>
     </form>
+  );
+}
+
+/** Who it is for: fixed when there is one choice (a pool's or a round's whole group says nothing). */
+function RecipientField({
+  targets,
+  value,
+  onChange,
+  poolRound,
+}: {
+  targets: { id: string | null; name: string }[];
+  value: string;
+  onChange: (value: string) => void;
+  poolRound: boolean;
+}) {
+  if (targets.length === 1) {
+    return (
+      <>
+        <input type="hidden" name="recipientId" value={targets[0].id ?? ""} />
+        {poolRound ? null : (
+          <p className="text-sm">
+            Alıcı: <span className="font-medium">{targets[0].name}</span>
+          </p>
+        )}
+      </>
+    );
+  }
+  return (
+    <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Alıcı">
+      {targets.map((target) => (
+        <label
+          key={target.id ?? "group"}
+          className="flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm has-[:checked]:border-primary has-[:checked]:bg-accent"
+        >
+          <input
+            type="radio"
+            name="recipientId"
+            value={target.id ?? ""}
+            checked={(target.id ?? "") === value}
+            onChange={() => onChange(target.id ?? "")}
+            className="accent-primary"
+          />
+          {target.name}
+        </label>
+      ))}
+    </div>
   );
 }
 

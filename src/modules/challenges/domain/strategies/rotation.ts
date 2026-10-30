@@ -79,11 +79,6 @@ export const rotationStrategy = defineStrategy<RotationConfig>({
     };
   },
 
-  // Turns that went by (before the list was opened here, too) are filled in pick by pick.
-  history(config) {
-    return { picksPerAssignment: config.picksPerTurn };
-  },
-
   describeConfig(config) {
     const mode = config.mode === "pairs" ? "Karşılıklı" : "Tek seçici";
     return `${mode} · kişi başı ${config.picksPerTurn} öneri${config.requireAcceptance ? " · onaylı" : ""}`;

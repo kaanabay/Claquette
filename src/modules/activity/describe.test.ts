@@ -63,6 +63,16 @@ describe("describeActivity", () => {
     );
   });
 
+  it("names a round ahead and the person a group admin added for", () => {
+    expect(describeActivity("entry.suggested", { title: "Dune", recipientName: "Ayşe", round: "Kasım 2026" })).toBe(
+      "Ayşe için “Dune” önerdi («Kasım 2026» turu için)",
+    );
+    expect(describeActivity("entry.suggested", { title: "Dune", pool: true, as: "Ayşe" })).toBe("havuza “Dune” ekledi (Ayşe adına)");
+    expect(describeActivity("entry.planned", { title: "Persona", round: "Mart 2026", as: "Ayşe", finished: "all" })).toBe(
+      "“Persona” ögesini «Mart 2026» turuna ekledi (Ayşe adına) · herkes bitirmişti",
+    );
+  });
+
   it("says whose pick a past round's item was, and for whom", () => {
     expect(
       describeActivity("entry.recorded", { title: "Persona", round: "Mart 2026", picker: "Ali", recipient: "Kaan", finished: "all" }),

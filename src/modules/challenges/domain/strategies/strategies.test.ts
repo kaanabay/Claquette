@@ -92,10 +92,6 @@ describe("rotation strategy", () => {
     expect(options).toMatchObject({ allowed: true, targets: [null], initialCategory: "active" });
   });
 
-  it("lets past turns be filled in, as many picks per assignment as a turn takes", () => {
-    expect(rotationStrategy.history?.(pairs)).toEqual({ picksPerAssignment: 1 });
-    expect(rotationStrategy.history?.({ ...turns, picksPerTurn: 3 })).toEqual({ picksPerAssignment: 3 });
-  });
 });
 
 describe("open strategy", () => {
@@ -173,11 +169,6 @@ describe("joint strategy", () => {
     expect(poolStrategy.planning).toBeUndefined();
   });
 
-  it("fills past rounds through planning, not history (only rotation has that)", () => {
-    expect(jointStrategy.history).toBeUndefined();
-    expect(openStrategy.history).toBeUndefined();
-    expect(poolStrategy.history).toBeUndefined();
-  });
 });
 
 describe("config handling", () => {

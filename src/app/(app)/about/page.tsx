@@ -129,8 +129,8 @@ export default function AboutPage() {
             kişisel listeler ve kişisel notlar bu yetkinin dışındadır.
           </li>
           <li>
-            <span className="text-foreground">Grup yöneticileri:</span> sırayla öneri listelerinde bir üyenin önerisini onun adına
-            girebilir (ör. geçmiş turları doldururken). Öge o üyenin önerisi olarak görünür; kimin girdiği grubun akışında yazar.
+            <span className="text-foreground">Grup yöneticileri:</span> ortak listelere bir üyenin önerisini ya da eklediği ögeyi onun
+            adına girebilir (ör. geçmiş turları doldururken). Öge o üyenin olarak görünür; kimin girdiği grubun akışında yazar.
           </li>
         </ul>
       </section>

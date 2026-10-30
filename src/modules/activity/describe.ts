@@ -13,6 +13,9 @@ const STATUS_PHRASES: Record<ProgressStatus, string> = {
 const FINISHED_SUFFIX: Record<string, string> = { all: " · herkes bitirmişti", me: " · kendisi bitirmişti" };
 const finishedSuffix = (value: unknown) => FINISHED_SUFFIX[String(value)] ?? "";
 
+// A group admin's addition for someone else names that person.
+const asSuffix = (value: unknown) => (typeof value === "string" && value ? ` (${value} adına)` : "");
+
 /** Turkish sentence (without the actor's name) for an activity row. */
 export function describeActivity(type: string, data: Record<string, unknown>, hasActor = true): string {
   const title = quoted(data.title);
@@ -45,9 +48,15 @@ export function describeActivity(type: string, data: Record<string, unknown>, ha
           : "listeyi yeniden başlattı";
     case "round.started":
       return `${Number(data.index) + 1}. turu başlattı`;
-    case "entry.suggested":
-      if (data.pool) return `havuza ${title} ekledi`;
-      return typeof data.recipientName === "string" ? `${data.recipientName} için ${title} önerdi` : `gruba ${title} önerdi`;
+    case "entry.suggested": {
+      const round = typeof data.round === "string" ? ` («${data.round}» turu için)` : "";
+      if (data.pool) return `havuza ${title} ekledi${asSuffix(data.as)}`;
+      return (
+        (typeof data.recipientName === "string" ? `${data.recipientName} için ${title} önerdi` : `gruba ${title} önerdi`) +
+        round +
+        asSuffix(data.as)
+      );
+    }
     case "entry.state_changed":
       if (data.reopened) return `${title} yeniden «${String(data.to)}» oldu`;
       return data.automatic
@@ -60,7 +69,9 @@ export function describeActivity(type: string, data: Record<string, unknown>, ha
       return (
         (data.accepted
           ? `${title} önerisini kabul edip «${String(data.round)}» turuna ekledi`
-          : `${title} ögesini «${String(data.round)}» turuna ekledi`) + finishedSuffix(data.finished)
+          : `${title} ögesini «${String(data.round)}» turuna ekledi`) +
+        asSuffix(data.as) +
+        finishedSuffix(data.finished)
       );
     case "entry.recorded": {
       // A pick filled in afterwards: whose it was and for whom.

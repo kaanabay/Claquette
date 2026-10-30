@@ -21,11 +21,11 @@ export type SuggestionContext<C> = {
   userId: string;
   /** Active participants ordered by position. */
   participants: readonly Participant[];
-  /** The current round; null before the start or after the end. */
+  /** The round asked about (usually the current one); null when there is none. */
   round: { index: number } | null;
-  /** Assignments of the current round. */
+  /** Assignments of that round. */
   assignments: readonly AssignmentPlan[];
-  /** The user's suggestions in the current round that are still in play (not dropped). */
+  /** The user's suggestions in that round that are still in play (not dropped). */
   roundSuggestions: readonly { recipientId: string | null }[];
   /** How many of the user's candidates are waiting in the pool. */
   poolCandidates: number;
@@ -54,12 +54,6 @@ export type PoolRules = { picksPerRound: number; selection: PoolSelection; autoD
 /** Rounds of a time-based list can be filled directly, past or future. null = no per-round limit. */
 export type PlanningRules = { itemsPerRound: number | null };
 
-/**
- * Picks can be entered afterwards, one stored assignment at a time: what each picker chose in a
- * round that is over (before the list was opened here, or nobody entered it in time), and, for
- * group admins, someone else's pick in the current round too (see domain/history.ts).
- */
-export type HistoryRules = { picksPerAssignment: number };
 
 /**
  * What a settings change does to a list that already holds items: "free" applies at once,
@@ -91,14 +85,15 @@ export interface ChallengeStrategy<C extends Record<string, unknown>> {
   readonly configFields: readonly ConfigField[];
   /** Assignments stored when a round starts. */
   planRound(ctx: PlanRoundContext<C>): AssignmentPlan[];
-  /** What the user may suggest right now, or why not. */
+  /**
+   * What the user may suggest into a round, or why not: the current one, and on lists without planning
+   * also one that is over or ahead (see domain/additions.ts), with that round's assignments.
+   */
   suggestionOptions(ctx: SuggestionContext<C>): SuggestionOptions;
   /** Present on strategies that collect candidates in a pool and select per round. */
   poolRules?(config: C): PoolRules;
   /** Present on strategies that let people fill any round themselves (see domain/plan.ts). */
   planning?(config: C): PlanningRules;
-  /** Present on strategies whose picks can be entered afterwards, per assignment (see domain/history.ts). */
-  history?(config: C): HistoryRules;
   /** Short summary of a config for badges, e.g. "Karşılıklı · kişi başı 1 öneri". */
   describeConfig(config: C): string;
   /**
