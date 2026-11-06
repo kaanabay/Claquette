@@ -51,7 +51,7 @@ async function Home() {
       {turns.length > 0 ? (
         <section>
           <SectionTitle>Öneri sırası sende</SectionTitle>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {turns.map((turn) => (
               <Link
                 key={turn.challengeId}
@@ -78,7 +78,7 @@ async function Home() {
       {awaitingAnswer.length > 0 ? (
         <section>
           <SectionTitle>Cevap bekleyen öneriler</SectionTitle>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {awaitingAnswer.map((card) => (
               <EntryCard key={card.id} card={card} showChallenge />
             ))}
@@ -89,7 +89,7 @@ async function Home() {
       {sharedLists.length > 0 ? (
         <section>
           <SectionTitle>Ortak listelerin</SectionTitle>
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {sharedLists.map((summary) => (
               <ChallengeCard key={summary.id} summary={summary} typeIcons={typeIcons} showGroup />
             ))}
@@ -97,7 +97,7 @@ async function Home() {
         </section>
       ) : null}
 
-      <section className="grid gap-6 lg:grid-cols-[1fr_20rem]">
+      <section className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div>
           <SectionTitle>Grupların</SectionTitle>
           {groups.length > 0 ? (

@@ -71,7 +71,7 @@ function WorkflowEditorInner({ groupId }: { groupId: string }) {
         <CardHeader>
           <CardTitle>Akış</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2">
+        <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-2">
             <Label htmlFor={fid("name")}>Ad</Label>
             <Input id={fid("name")} name="name" required maxLength={60} placeholder="ör. Kitap kulübü akışı" />

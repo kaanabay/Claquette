@@ -138,7 +138,7 @@ export default function AboutPage() {
       <section>
         <SectionTitle>Açık kaynak</SectionTitle>
         <p className="mb-3 text-sm text-muted-foreground">Claquette şu açık kaynak projelerin üzerine kurulu:</p>
-        <ul className="grid gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
+        <ul className="grid grid-cols-1 gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
           {OPEN_SOURCE.map(([name, license, href]) => (
             <li key={name} className="flex items-baseline justify-between gap-3 border-b border-dashed py-1">
               <a href={href} target="_blank" rel="noreferrer" className="font-medium underline-offset-4 hover:underline">

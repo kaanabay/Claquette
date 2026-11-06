@@ -24,7 +24,7 @@ export function AssignedSection({ assigned }: { assigned: AssignedItems }) {
                 <h3 className="flex items-center gap-2 text-sm font-semibold">
                   {title} <span className="font-normal text-muted-foreground">{assigned[key].length}</span>
                 </h3>
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {assigned[key].map(({ card, note }) => (
                     <EntryCard key={card.id} card={card} showChallenge showState={false} roundNote={note} />
                   ))}

@@ -107,7 +107,7 @@ function SlotRow({ slot, data }: { slot: PlanSlotView; data: ChallengePageData }
         ) : null}
       </div>
       {slot.entries.length > 0 ? (
-        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
           {slot.entries.map((card) => (
             <EntryCard key={card.id} card={card} showRound={false} byline="added" className="shadow-none" />
           ))}
@@ -147,7 +147,7 @@ export function SuggestionsPanel({ data }: { data: ChallengePageData }) {
           Bir şey aklına gelirse “Öneri ekle” ile not düş, unutulmasın.
         </EmptyState>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {suggestions.map(({ card, canAccept }) => {
             const authoredByViewer = card.suggestedBy !== null && card.suggestedBy.id === data.viewerId;
             return (
@@ -212,7 +212,7 @@ export function DroppedPanel({ data }: { data: ChallengePageData }) {
         <Badge tone="rose">Elenenler</Badge>
         <span className="text-muted-foreground">{dropped.length} · göster</span>
       </summary>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {dropped.map((card) => (
           <EntryCard key={card.id} card={card} />
         ))}

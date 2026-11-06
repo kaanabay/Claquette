@@ -114,7 +114,7 @@ async function Entry({ params }: Pick<PageProps<"/entries/[entryId]">, "params">
         </div>
       </section>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="flex min-w-0 flex-col gap-6">
           <Card>
             <CardHeader>

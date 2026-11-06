@@ -73,12 +73,12 @@ async function Group({ params }: Pick<PageProps<"/groups/[groupId]">, "params">)
         {data.visitingAsSiteAdmin ? <SiteAdminNotice /> : null}
       </header>
 
-      <div className="grid gap-8 lg:grid-cols-[1fr_20rem]">
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="flex min-w-0 flex-col gap-10">
           <section>
             <SectionTitle>Ortak listeler</SectionTitle>
             {current.length > 0 ? (
-              <div className="grid gap-3 md:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 {current.map((summary) => (
                   <ChallengeCard key={summary.id} summary={summary} typeIcons={typeIcons} />
                 ))}
@@ -94,7 +94,7 @@ async function Group({ params }: Pick<PageProps<"/groups/[groupId]">, "params">)
             {archived.length > 0 ? (
               <details className="mt-6">
                 <summary className="cursor-pointer text-sm font-medium text-muted-foreground">Arşiv ({archived.length})</summary>
-                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
                   {archived.map((summary) => (
                     <ChallengeCard key={summary.id} summary={summary} typeIcons={typeIcons} />
                   ))}

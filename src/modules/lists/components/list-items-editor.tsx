@@ -219,7 +219,7 @@ function NoteEditor({ itemId, note }: { itemId: string; note: string | null }) {
   if (!editing) {
     return (
       <div className="flex flex-col items-start gap-1">
-        {note ? <p className="whitespace-pre-wrap text-sm italic text-muted-foreground">“{note}”</p> : null}
+        {note ? <p className="whitespace-pre-wrap wrap-anywhere text-sm italic text-muted-foreground">“{note}”</p> : null}
         <button
           type="button"
           onClick={() => setEditing(true)}

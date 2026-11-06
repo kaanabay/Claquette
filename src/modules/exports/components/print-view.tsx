@@ -22,7 +22,7 @@ export function PrintView({ doc, backHref, autoPrint }: { doc: ExportDoc; backHr
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 print:max-w-none print:gap-4">
-      <div className="flex items-center justify-between gap-3 print:hidden">
+      <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
         <Link href={backHref} className={buttonVariants({ variant: "ghost", size: "sm" })}>
           <ArrowLeft /> Listeye dön
         </Link>

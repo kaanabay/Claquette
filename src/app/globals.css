@@ -76,6 +76,8 @@
   body {
     background: var(--background);
     color: var(--foreground);
+    /* A long link or word breaks rather than widening the page on a phone. */
+    overflow-wrap: break-word;
   }
 
   :focus-visible {

@@ -32,13 +32,13 @@ async function MyLists() {
         </p>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-[1fr_22rem]">
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <section className="min-w-0">
           <SectionTitle>
             Listeler <span className="font-normal text-muted-foreground">({lists.length})</span>
           </SectionTitle>
           {lists.length > 0 ? (
-            <div className="grid gap-3 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               {lists.map((list) => (
                 <ListCard key={list.id} list={list} />
               ))}

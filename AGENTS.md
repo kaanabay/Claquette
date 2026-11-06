@@ -64,6 +64,11 @@ Rules that keep this codebase working:
 - Name media items with `formatTitle` / `MediaTitle` (`src/modules/media/titles.ts`): original first, Turkish in
   parentheses, season last ("Lost · 2. Sezon"). Select `...titleColumns` (`src/modules/media/columns.ts`) wherever
   a name is shown. A season of a series is its own catalog item (`season_number`, TMDB id `tv:<id>:s<n>`).
+- Nothing may widen the page on a phone. A grid that sets its columns at a breakpoint starts from `grid-cols-1`, and a
+  sidebar layout's main column is `minmax(0,1fr)`: an implicit or plain `1fr` column grows to its widest unbreakable
+  line (a `truncate`d title, a pasted link). Long words break by default (`overflow-wrap` on `body`), except in a box
+  sized by its content (`items-start`, `w-fit`): give free text there `wrap-anywhere`. Dropdown panels
+  (`absolute right-0`) open leftwards from their trigger, so such triggers sit at the end of their row.
 - Board notes (`board_notes`) are free text for people; the engine never reads them. Edits carry the version
   they started from and are refused if the note changed meanwhile.
 - After signing in, navigate with a full load (`window.location`): links prefetched while signed out

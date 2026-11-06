@@ -192,7 +192,7 @@ function ChallengeFormInner({ groupId, today, members, mediaTypes, workflows, ed
               <FieldError errors={errors.cadenceInterval} />
             </>
           )}
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {locked ? null : (
               <div className="flex flex-col gap-2">
                 <Label htmlFor={fid("startsOn")}>Başlangıç</Label>
@@ -236,7 +236,7 @@ function ChallengeFormInner({ groupId, today, members, mediaTypes, workflows, ed
               {lockedNote}
             </div>
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {STRATEGIES.map((option) => (
                 <label
                   key={option.key}
@@ -267,7 +267,7 @@ function ChallengeFormInner({ groupId, today, members, mediaTypes, workflows, ed
             </p>
           ) : null}
           {/* key: remount with the new strategy's defaults when it changes */}
-          <div key={strategy.key} className="grid gap-4 sm:grid-cols-2">
+          <div key={strategy.key} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {strategy.configFields.map((field) => (
               <ConfigFieldInput
                 key={field.name}

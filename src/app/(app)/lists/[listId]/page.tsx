@@ -107,7 +107,7 @@ async function ListContent({ params, searchParams }: Pick<PageProps<"/lists/[lis
         </div>
       </header>
 
-      <div className="grid gap-8 lg:grid-cols-[1fr_20rem]">
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <aside className="flex min-w-0 flex-col gap-4 lg:order-2">
           <Card>
             <CardHeader>

@@ -56,7 +56,7 @@ export function PoolPanel({ data }: { data: ChallengePageData }) {
           )}
         </EmptyState>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {pool.candidates.map((card) => (
             <EntryCard
               key={card.id}

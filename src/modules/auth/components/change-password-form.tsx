@@ -15,7 +15,7 @@ export function ChangePasswordForm() {
         <Label htmlFor={fid("current-password")}>Mevcut şifre</Label>
         <Input id={fid("current-password")} name="currentPassword" type="password" autoComplete="current-password" required />
       </div>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-2">
           <Label htmlFor={fid("new-password")}>Yeni şifre</Label>
           <Input id={fid("new-password")} name="newPassword" type="password" autoComplete="new-password" minLength={8} required />
