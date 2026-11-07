@@ -14,13 +14,19 @@ import {
   type Slot,
   type SlotTiming,
 } from "./domain/plan";
-import { getStrategy, parseStoredConfig, type PlanningRules } from "./domain/strategies";
+import { getStrategy, parseStoredConfig, type PlanningRules, type PoolRules } from "./domain/strategies";
 import { cadenceOf, createRoundsThrough, type RoundRow, type RoundsChallenge } from "./rounds";
 
 /** The challenge's planning rules, or null when its strategy doesn't support planning. */
 export function planningRules(challenge: Pick<RoundsChallenge, "strategy" | "strategyConfig">): PlanningRules | null {
   const strategy = getStrategy(challenge.strategy);
   return strategy.planning?.(parseStoredConfig(strategy, challenge.strategyConfig)) ?? null;
+}
+
+/** The challenge's pool rules, or null when its strategy doesn't collect candidates in a pool. */
+export function poolRulesOf(challenge: Pick<RoundsChallenge, "strategy" | "strategyConfig">): PoolRules | null {
+  const strategy = getStrategy(challenge.strategy);
+  return strategy.poolRules?.(parseStoredConfig(strategy, challenge.strategyConfig)) ?? null;
 }
 
 export function roundLabel(challenge: Pick<RoundsChallenge, "cadenceUnit">, round: Pick<RoundRow, "index" | "startsOn" | "endsOn">) {

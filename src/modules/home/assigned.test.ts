@@ -62,4 +62,17 @@ describe("groupAssigned", () => {
     expect(ids(groups.overdue)).toEqual(["august", "september"]);
     expect(ids(groups.current)).toEqual(["october", "open"]);
   });
+
+  it("keeps “Tur dışı” items apart, in the order they came, and only those still waiting for the viewer", () => {
+    const off = (id: string, waiting: string[] = ["kaan"]) => ({
+      ...card(id, "current", october, waiting),
+      roundIndex: null,
+      roundStartsOn: null,
+      roundEndsOn: null,
+      tracking: { timing: "off" as const, waiting: waiting.map((personId) => ({ id: personId })) },
+    });
+    const groups = groupAssigned([off("dune"), card("october", "current", october), off("finished", ["ali"]), off("arrival")]);
+    expect(ids(groups.offRound)).toEqual(["dune", "arrival"]);
+    expect(ids(groups.current)).toEqual(["october"]);
+  });
 });

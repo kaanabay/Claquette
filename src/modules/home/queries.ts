@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq, getTableColumns, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
+import { and, eq, getTableColumns, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { challengeParticipants, challenges, entries, entryProgress, groups, workflowStates } from "@/db/schema";
 import { qualified } from "@/db/sql";
@@ -88,14 +88,14 @@ export async function getHome(userId: string) {
       ),
       12,
     ),
-    // Items in a round that are meant for the user and not finished by them ("Bana atananlar").
+    // Items the group took on (in a round, or "Tur dışı": no round) that are meant for the user and
+    // not finished by them ("Bana atananlar").
     loadEntryCards(
       userId,
       and(
         inMyGroups,
         eq(challenges.status, "active"),
         eq(workflowStates.category, "active"),
-        isNotNull(entries.roundId),
         or(
           eq(entries.suggestedFor, userId),
           // group-wide entries of challenges the user takes part in
@@ -103,7 +103,7 @@ export async function getHome(userId: string) {
         ),
         sql`not exists (
           select 1 from ${entryProgress} ep
-          where ep.entry_id = ${qualified(entries.id)} and ep.user_id = ${userId} and ep.status in ('completed', 'dropped')
+          where ep.entry_id = ${qualified(entries.id)} and ep.user_id = ${userId} and ep.status in ('completed', 'dropped', 'skipped')
         )`,
       ),
       200,
@@ -128,6 +128,7 @@ export async function getHome(userId: string) {
             card,
             note: card.roundStartsOn ? startsIn(card.roundStartsOn, todayOf(card)) : null,
           })),
+          offRound: byTime.offRound.map((card) => ({ card, note: null })),
         }
       : null,
   };

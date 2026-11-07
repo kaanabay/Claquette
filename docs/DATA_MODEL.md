@@ -116,7 +116,7 @@ erDiagram
   entries {
     uuid id PK
     uuid challenge_id FK
-    uuid round_id FK "boş = havuzda"
+    uuid round_id FK "boş = havuzda, öneri ya da tur dışı"
     uuid media_item_id FK
     uuid state_id FK
     text suggested_by FK
@@ -126,7 +126,7 @@ erDiagram
   entry_progress {
     uuid entry_id PK
     text user_id PK
-    enum status "planned, in_progress, completed, dropped"
+    enum status "planned, in_progress, completed, dropped, skipped"
     smallint rating "1-10"
   }
   notes {
@@ -201,8 +201,8 @@ erDiagram
 - **round_assignments:** kuralın `planRound()` çıktısı ("Kaan → Ayşe", ya da "Ayşe → tüm grup"). Saklandığı için katılımcılar değişse de geçmiş turlar doğru kalıyor.
 
 ### Ögeler ve etkileşim
-- **entries:** bir medya ögesinin bir ortak listeye girmiş hali. İş akışında ilerleyen birim bu. `round_id` boşsa havuzda bekleyen aday ya da planlı listede tura yerleşmemiş öneri. `suggested_for` boşsa öneri tüm gruba.
-- **entry_progress:** kişi başına bir satır: kendi durumu, 1–10 puan (`CHECK` kısıtıyla), başlama ve bitirme zamanı.
+- **entries:** bir medya ögesinin bir ortak listeye girmiş hali. İş akışında ilerleyen birim bu. `round_id` boşsa ve durumu "Karar bekliyor"daysa havuzda bekleyen aday ya da planlı listede tura yerleşmemiş öneri; grubun üstlendiği bir durumdaysa ("Sürüyor", "Tamamlandı") **tur dışı**: turlara girmez, herkes kendi zamanında bitirir. Bunun için ayrı bir alan yok; yer, tur ve durumun kategorisinden okunur (`placeOf`). `suggested_for` boşsa öneri tüm gruba.
+- **entry_progress:** kişi başına bir satır: kendi durumu, 1–10 puan (`CHECK` kısıtıyla), başlama ve bitirme zamanı. `dropped` başlayıp yarım bırakmak, `skipped` hiç başlamamaya karar vermek ("İzlemeyeceğim"); ikisinde de o kişi artık beklenmez.
 - **notes:** `private` (sadece yazan görür) ya da `shared` (grup görür, aynı zamanda sohbet akışı); spoiler işareti.
 - **entry_votes:** havuz adaylarına oy.
 
@@ -244,6 +244,8 @@ erDiagram
 | Kişisel izleme listesi, yıl sonu Top 10 | Listelerim → yeni liste (sıralı ya da sırasız), gizli ya da herkese açık |
 | Aralarından her ay birini seçtiğimiz 40 yönetmen | Ortak listenin panosunda bir not; Keep'ten yapıştırılır, "Liste yap" ile işaretlenebilir olur, kullanılan yönetmen işaretlenir |
 | Birlikte izleyeceğimiz diziler | Süresiz + Ortak havuz (elle ya da oyla seçim); her dizi bitince "Sonraki tura geç". Yalnızca not olarak tutmak için grup panosu |
+| Birimizin izlediği dizi listede kalsın ama tura girmesin | "Tur dışı" olarak ekle ("Sadece ben bitirdim") ya da havuzdaki adayı "Tur dışına al"; havuzdaki adayı tek başına bitiren kişi onu kendiliğinden tur dışına çıkarır. Diğeri kendi zamanında izler ya da "İzlemeyeceğim" der |
+| Aynı havuzda dizi, film ve kitap | İçerik türlerinde hepsini seç, sayfadaki tür filtresiyle süz. Türler aynı anda ayrı hızlarda ilerliyorsa türe göre ayrı listeler (bir turdaki her şey aynı anda kapanır) |
 | Üçüncü arkadaş katıldı | Davetle gruba girer, liste sayfasında "Listeye katıl"; bir sonraki turdan itibaren rotasyonda |
 | Aynı kişilerle ayrı bir grup (ör. iş arkadaşları) | Yeni grup; kişi birden fazla grupta olabilir |
 | "Okunuyor" ya da "Ertelendi" adımı | Grup sayfası → Durum akışları → Yeni akış |

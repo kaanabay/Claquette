@@ -3,7 +3,9 @@ import type { ProgressStatus } from "./labels";
 import {
   assigneesOf,
   describeRoundSummary,
+  everyoneGaveUp,
   finishedBy,
+  isSettled,
   listPeople,
   progressOutcome,
   roundTiming,
@@ -56,14 +58,44 @@ describe("progressOutcome", () => {
     expect(progressOutcome(both, statuses({ kaan: "completed", ali: "dropped" }))).toBe("done");
   });
 
+  it("doesn't wait for someone who passed on it (“İzlemeyeceğim”)", () => {
+    expect(progressOutcome(both, statuses({ kaan: "completed", ali: "skipped" }))).toBe("done");
+  });
+
   it("decides nothing when everyone gave up or nobody is assigned", () => {
     expect(progressOutcome(both, statuses({ kaan: "dropped", ali: "dropped" }))).toBeNull();
+    expect(progressOutcome(both, statuses({ kaan: "skipped", ali: "dropped" }))).toBeNull();
     expect(progressOutcome([], statuses({}))).toBeNull();
   });
 });
 
+describe("isSettled and everyoneGaveUp", () => {
+  const both = ["kaan", "ali"];
+
+  it("counts finishing, setting aside and passing as settled", () => {
+    expect(["completed", "dropped", "skipped"].every((status) => isSettled(status as ProgressStatus))).toBe(true);
+    expect(isSettled("in_progress")).toBe(false);
+    expect(isSettled(null)).toBe(false);
+  });
+
+  it("is true only when everyone is done with it and nobody finished it", () => {
+    expect(everyoneGaveUp(both, statuses({ kaan: "skipped", ali: "dropped" }))).toBe(true);
+    expect(everyoneGaveUp(both, statuses({ kaan: "skipped", ali: "completed" }))).toBe(false);
+    expect(everyoneGaveUp(both, statuses({ kaan: "skipped" }))).toBe(false);
+    expect(everyoneGaveUp([], statuses({}))).toBe(false);
+  });
+});
+
 describe("stateAfterProgress", () => {
-  const base = { tracked: true, actorIsAssignee: true, actorWasSettled: false, actorIsSettled: true } as const;
+  const base = {
+    place: "round",
+    planning: false,
+    pool: false,
+    gaveUp: false,
+    actorIsAssignee: true,
+    actorWasSettled: false,
+    actorIsSettled: true,
+  } as const;
 
   it("completes an accepted item when the last assignee finishes", () => {
     expect(stateAfterProgress({ ...base, category: "active", outcome: "done" })).toBe("done");
@@ -71,19 +103,40 @@ describe("stateAfterProgress", () => {
     expect(stateAfterProgress({ ...base, category: "active", outcome: "open" })).toBeNull();
   });
 
-  it("never completes a suggestion waiting for a round, or a dropped item", () => {
-    expect(stateAfterProgress({ ...base, tracked: false, category: "pending", outcome: "done" })).toBeNull();
-    expect(stateAfterProgress({ ...base, category: "dropped", outcome: "done" })).toBeNull();
+  it("never completes a planning list's suggestion waiting for a round, or a dropped item", () => {
+    expect(stateAfterProgress({ ...base, place: "waiting", planning: true, category: "pending", outcome: "done" })).toBeNull();
+    expect(stateAfterProgress({ ...base, place: "dropped", category: "dropped", outcome: "done" })).toBeNull();
   });
 
   it("reopens a done item when an assignee takes back their 'finished'", () => {
     const tookBack = { ...base, actorWasSettled: true, actorIsSettled: false };
     expect(stateAfterProgress({ ...tookBack, category: "done", outcome: "open" })).toBe("active");
+    expect(stateAfterProgress({ ...tookBack, place: "off", category: "done", outcome: "open" })).toBe("active");
     expect(stateAfterProgress({ ...tookBack, actorIsAssignee: false, category: "done", outcome: "open" })).toBeNull();
   });
 
   it("leaves a completion set by hand alone when someone else only updates their progress", () => {
     expect(stateAfterProgress({ ...base, actorIsSettled: false, category: "done", outcome: "open" })).toBeNull();
+  });
+
+  it("tracks a “Tur dışı” item like a round's, and drops it once nobody will finish it", () => {
+    const off = { ...base, place: "off", category: "active" } as const;
+    expect(stateAfterProgress({ ...off, outcome: "done" })).toBe("done");
+    expect(stateAfterProgress({ ...off, outcome: "open" })).toBeNull();
+    expect(stateAfterProgress({ ...off, outcome: null, gaveUp: true })).toBe("dropped");
+    // In a round the group decides those by hand.
+    expect(stateAfterProgress({ ...base, category: "active", outcome: null, gaveUp: true })).toBeNull();
+  });
+
+  it("takes a pool candidate someone finished alone out of the pool", () => {
+    const candidate = { ...base, place: "waiting", pool: true, category: "pending" } as const;
+    expect(stateAfterProgress({ ...candidate, outcome: "open" })).toBe("active");
+    expect(stateAfterProgress({ ...candidate, outcome: "done" })).toBe("done");
+    expect(stateAfterProgress({ ...candidate, outcome: null, gaveUp: true })).toBe("dropped");
+    // Starting it, someone else's change, or a planning list's suggestion leave it waiting.
+    expect(stateAfterProgress({ ...candidate, actorIsSettled: false, outcome: "open" })).toBeNull();
+    expect(stateAfterProgress({ ...candidate, actorIsAssignee: false, outcome: "open" })).toBeNull();
+    expect(stateAfterProgress({ ...candidate, pool: false, planning: true, outcome: "open" })).toBeNull();
   });
 });
 
@@ -111,10 +164,16 @@ describe("trackEntry", () => {
     expect(trackEntry({ category: "active", timing: "past", people: [kaan, { ...ali, status: "dropped" }] })?.overdue).toBe(false);
   });
 
-  it("tracks only items in a round that the group took on", () => {
+  it("tracks only items the group took on: in a round, or “Tur dışı”", () => {
     expect(trackEntry({ category: "pending", timing: "current", people: [kaan] })).toBeNull();
     expect(trackEntry({ category: "dropped", timing: "past", people: [kaan] })).toBeNull();
     expect(trackEntry({ category: "active", timing: null, people: [kaan] })).toBeNull();
+  });
+
+  it("tracks a “Tur dışı” item without a date: never overdue", () => {
+    const tracking = trackEntry({ category: "active", timing: "off", people: [kaan, ali] });
+    expect(tracking).toMatchObject({ timing: "off", overdue: false });
+    expect(tracking?.waiting.map((person) => person.id)).toEqual(["ali"]);
   });
 });
 

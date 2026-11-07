@@ -45,6 +45,14 @@ Rules that keep this codebase working:
 - Completion follows people, not dates (`src/modules/entries/tracking.ts`): an entry is done when everyone it is
   meant for has finished it, and "overdue" is derived from round dates on every read, never stored. Placing or
   moving an item never flips its state; a past round asks who finished it.
+- "Tur dışı" (`src/modules/entries/placement.ts`) is an item with no round that the group took on (active or done):
+  nothing stores it, `placeOf` reads it from the round and the state's category, so a pool candidate or a planning
+  suggestion is "waiting" (pending). It exists on every kind of list, outside the strategy's rules, and is tracked like a
+  round's item without a date (never overdue). A pool candidate someone settles alone leaves the pool for it, and one
+  nobody will finish is dropped (`stateAfterProgress`). Moves return where the item was, for "Geri al" (`takeOffRound`,
+  `returnFromOffRound`). "İzlemeyeceğim" (`skipped`) settles a person like finishing does.
+- Pages filter their items in place (`src/components/item-filter.tsx`): wrap item sections in `ItemFilterProvider`;
+  `EntryCard` follows the filter itself, other item markup uses `FilterItem` / `FilterGroup`, counts `FilteredCount`.
 - On lists without planning an addition may name any round (`targets.ts`: past, current, or on a calendar ahead,
   created with `createRoundsThrough`); the strategy's own `suggestionOptions` is asked about that round
   (`roundOptions`). Group admins may add for another participant (`as`, `canAddAs`); the item is credited to them and

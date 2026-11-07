@@ -103,7 +103,7 @@ export async function getChallengePage(userId: string, challengeId: string) {
         options,
         defaultIndex: defaultSlot(options)?.index ?? null,
         suggestions: cards
-          .filter((card) => card.roundId === null && inPlay(card))
+          .filter((card) => card.roundId === null && card.state.category === "pending")
           .sort(byOldest)
           .map((card) => ({
             card,
@@ -153,6 +153,16 @@ export async function getChallengePage(userId: string, challengeId: string) {
           openSlots: round ? Math.max(0, poolRules.picksPerRound - roundCards.filter(inPlay).length) : 0,
         }
       : null,
+    // "Tur dışı": open ones, those still waiting for the viewer first; finished ones apart.
+    offRound: {
+      open: cards
+        .filter((card) => card.offRound && card.state.category === "active")
+        .sort((a, b) => Number(waitsFor(b, userId)) - Number(waitsFor(a, userId))),
+      done: cards.filter((card) => card.offRound && card.state.category === "done"),
+      canAdd: (access.isParticipant || access.isAdmin) && challenge.status === "active",
+    },
+    // Media types among the items (for the type filter), most common first.
+    mediaTypeCounts: countTypes(cards),
     plan,
     timeline,
     board: states.map((state) => ({
@@ -165,6 +175,15 @@ export async function getChallengePage(userId: string, challengeId: string) {
 }
 
 export type ChallengePageData = NonNullable<Awaited<ReturnType<typeof getChallengePage>>>;
+
+const waitsFor = (card: EntryCard, userId: string) => card.tracking?.waiting.some((person) => person.id === userId) ?? false;
+
+/** How many items there are of each media type, most common first. */
+function countTypes(cards: readonly EntryCard[]): { slug: string; count: number }[] {
+  const counts = new Map<string, number>();
+  for (const card of cards) counts.set(card.media.mediaType, (counts.get(card.media.mediaType) ?? 0) + 1);
+  return [...counts].map(([slug, count]) => ({ slug, count })).sort((a, b) => b.count - a.count);
+}
 
 export async function getNewChallengeData(userId: string, groupId: string) {
   if (!isUuid(groupId)) return null;
@@ -220,20 +239,30 @@ export async function getChallengeSettingsData(userId: string, challengeId: stri
   };
 }
 
-/** `round`: a round other than the current one (lists without planning); `as`: whom to add for (group admins). */
+/**
+ * `round`: a round other than the current one (lists without planning), or "off" for "Tur dışı" (any
+ * list); `as`: whom to add for (group admins).
+ */
 export type SuggestPageParams = { round?: string; mode?: string; media?: string; as?: string };
+
+/** Adding as "Tur dışı": into no round, so the list's rule has no say (no limits, for everyone). */
+const OFF_ROUND_OPTIONS: SuggestionOptions = { allowed: true, placement: "round", targets: [null], remaining: null, initialCategory: "active" };
 
 /** Where an addition goes and whose it is, as the add panel shows (and switches) them. */
 export type AddContext = {
   /** Planning lists choose a round in the form; pool lists add to the pool unless a round is named. */
   kind: "plan" | "pool" | "rounds";
-  /** The round it goes into (lists without planning); null for a pool, or when no round runs. */
+  /** The round it goes into (lists without planning); null for a pool, "Tur dışı", or when no round runs. */
   round: { index: number; label: string; timing: RoundTiming } | null;
+  /** Lists without planning: it goes in as "Tur dışı" (planning lists choose that in the form). */
+  offRound: boolean;
+  /** People taking part, for "who finished it?" about a "Tur dışı" item. */
+  participantCount: number;
   credited: { id: string; name: string; isViewer: boolean };
   /** For a round that is over: how "who finished it?" asks about each possible recipient. */
   audiences: { recipientId: string | null; audience: FinishedAudience }[];
   /** Rounds to switch to (lists without planning), each with its link. */
-  rounds: { key: string; label: string; timing: RoundTiming | "pool"; href: string; selected: boolean }[];
+  rounds: { key: string; label: string; timing: RoundTiming | "pool" | "off"; href: string; selected: boolean }[];
   /** Group admins: the people to add for, each with its link. */
   people: { id: string; name: string; href: string; selected: boolean }[];
 };
@@ -268,8 +297,9 @@ export async function getSuggestPageData(userId: string, challengeId: string, pa
     creditedIsParticipant: active.some((participant) => participant.userId === creditedId),
     isAdmin: access.isAdmin,
   });
+  const offRound = params.round === "off";
   // Links that switch the panel's round or person and keep the rest (a planning list keeps its round and mode).
-  const link = (round: number | null, as: string) => {
+  const link = (round: number | "off" | null, as: string) => {
     const query = new URLSearchParams({ add: "1" });
     const keptRound = round !== null ? String(round) : planningRules ? (params.round ?? null) : null;
     if (keptRound !== null) query.set("round", keptRound);
@@ -306,7 +336,9 @@ export async function getSuggestPageData(userId: string, challengeId: string, pa
     const choices = selectableRounds(challenge, roundRows, filledByRound);
     const requested = /^\d+$/.test(params.round ?? "") ? Number(params.round) : null;
     let missing = false;
-    if (requested !== null) {
+    if (offRound) {
+      // "Tur dışı": no round to find.
+    } else if (requested !== null) {
       target = await findRound(db, challenge, requested);
       missing = target === null;
     } else if (!poolList) {
@@ -320,7 +352,13 @@ export async function getSuggestPageData(userId: string, challengeId: string, pa
         }
       }
     }
-    options = blocked ?? (missing ? { allowed: false, reason: "Bu tur bulunamadı." } : await checkTarget(db, challenge, creditedId, target));
+    options =
+      blocked ??
+      (offRound
+        ? OFF_ROUND_OPTIONS
+        : missing
+          ? { allowed: false, reason: "Bu tur bulunamadı." }
+          : await checkTarget(db, challenge, creditedId, target));
 
     const ordered = [
       ...choices.filter((choice) => choice.timing === "current"),
@@ -328,7 +366,9 @@ export async function getSuggestPageData(userId: string, challengeId: string, pa
       ...choices.filter((choice) => choice.timing === "past").reverse(),
     ];
     rounds = [
-      ...(poolList ? [{ key: "pool", label: "Havuz (tur seçimi kurallara göre)", timing: "pool" as const, href: link(null, creditedId), selected: target === null }] : []),
+      ...(poolList
+        ? [{ key: "pool", label: "Havuz (tur seçimi kurallara göre)", timing: "pool" as const, href: link(null, creditedId), selected: target === null && !offRound }]
+        : []),
       ...ordered.map((choice) => ({
         key: String(choice.index),
         label: describeSlotOption({ label: choice.label, timing: choice.timing, isFull: false }),
@@ -336,12 +376,15 @@ export async function getSuggestPageData(userId: string, challengeId: string, pa
         href: link(choice.timing === "current" && !poolList ? null : choice.index, creditedId),
         selected: target?.index === choice.index,
       })),
+      { key: "off", label: "Tur dışı (herkes kendi zamanında)", timing: "off" as const, href: link("off", creditedId), selected: offRound },
     ];
   }
 
   const context: AddContext = {
     kind: planningRules ? "plan" : poolList ? "pool" : "rounds",
     round: target ? { index: target.index, label: target.label, timing: target.timing } : null,
+    offRound: offRound && !planningRules,
+    participantCount: active.length,
     credited: { id: creditedId, name: names.get(creditedId) ?? "?", isViewer: creditedId === userId },
     audiences: (options.allowed ? options.targets : []).map((recipientId) => ({
       recipientId,
@@ -359,7 +402,10 @@ export async function getSuggestPageData(userId: string, challengeId: string, pa
           .map((participant) => ({
             id: participant.userId,
             name: participant.userId === userId ? `${participant.name} (sen)` : participant.name,
-            href: link(target && !(target.timing === "current" && !poolList) ? target.index : null, participant.userId),
+            href: link(
+              offRound ? "off" : target && !(target.timing === "current" && !poolList) ? target.index : null,
+              participant.userId,
+            ),
             selected: participant.userId === creditedId,
           }))
       : [],
@@ -369,7 +415,7 @@ export async function getSuggestPageData(userId: string, challengeId: string, pa
   let plan: {
     options: SlotOption[];
     defaultIndex: number | null;
-    defaultMode: "plan" | "suggest";
+    defaultMode: "plan" | "suggest" | "off";
     capacity: number | null;
     participantCount: number;
   } | null = null;
@@ -377,8 +423,8 @@ export async function getSuggestPageData(userId: string, challengeId: string, pa
     const choices = await loadSlotOptions(challenge, planning);
     plan = {
       options: choices,
-      defaultIndex: defaultSlot(choices, params.round)?.index ?? null,
-      defaultMode: params.mode === "suggest" || choices.length === 0 ? "suggest" : "plan",
+      defaultIndex: defaultSlot(choices, offRound ? undefined : params.round)?.index ?? null,
+      defaultMode: offRound ? "off" : params.mode === "suggest" || choices.length === 0 ? "suggest" : "plan",
       capacity: planning.itemsPerRound,
       participantCount: participants.filter((participant) => participant.isActive).length,
     };

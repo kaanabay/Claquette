@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { challenges, entries, entryProgress, mediaItems, workflowStates } from "@/db/schema";
 import { logActivity } from "@/modules/activity/service";
@@ -12,7 +12,8 @@ import { assigneesOf, progressOutcome } from "./tracking";
 
 /**
  * After the people taking part changed (someone left or was removed), items that everyone still
- * taking part has finished become done. Nothing is reopened: joining never undoes a completion.
+ * taking part has finished become done, "Tur dışı" ones included. Nothing is reopened: joining never
+ * undoes a completion.
  */
 export async function settleEntries(challengeId: string): Promise<void> {
   const open = await db
@@ -27,7 +28,8 @@ export async function settleEntries(challengeId: string): Promise<void> {
     .innerJoin(workflowStates, eq(workflowStates.id, entries.stateId))
     .innerJoin(challenges, eq(challenges.id, entries.challengeId))
     .innerJoin(mediaItems, eq(mediaItems.id, entries.mediaItemId))
-    .where(and(eq(entries.challengeId, challengeId), isNotNull(entries.roundId), eq(workflowStates.category, "active")));
+    // Items in a round and "Tur dışı" ones (no round, active): a suggestion waiting for a round is pending.
+    .where(and(eq(entries.challengeId, challengeId), eq(workflowStates.category, "active")));
   if (open.length === 0) return;
 
   const [participants, progress, states] = await Promise.all([

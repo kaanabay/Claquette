@@ -1,7 +1,7 @@
 import "server-only";
 import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { db, type Executor, type Transaction } from "@/db";
-import { challenges, entries, entryProgress, entryVotes, mediaItems, notes, users, workflowStates } from "@/db/schema";
+import { challenges, entries, entryProgress, entryVotes, mediaItems, notes, rounds, users, workflowStates } from "@/db/schema";
 import { qualified } from "@/db/sql";
 import { AppError, type BatchResult } from "@/lib/action-state";
 import { fromDayValue } from "@/lib/short-date";
@@ -11,7 +11,16 @@ import { requireChallengeAccess } from "@/modules/challenges/context";
 import { canAddAs, startingCategory } from "@/modules/challenges/domain/additions";
 import { canAcceptSuggestion, isPlanStateChangeAllowed } from "@/modules/challenges/domain/plan";
 import { getStrategy, parseStoredConfig } from "@/modules/challenges/domain/strategies";
-import { assertRoomInRound, lockSlot, PastLastRoundError, planningRules, RoundFullError } from "@/modules/challenges/planning";
+import {
+  assertRoomInRound,
+  lockSlot,
+  PastLastRoundError,
+  planningRules,
+  poolRulesOf,
+  roundLabel,
+  RoundFullError,
+} from "@/modules/challenges/planning";
+import { roomInPoolRound } from "@/modules/challenges/pool";
 import { activeParticipants, createRoundsThrough, syncRounds } from "@/modules/challenges/rounds";
 import { getSuggestionState } from "@/modules/challenges/suggestions";
 import { checkTarget, findCurrentRound, findRound, type RoundRef } from "@/modules/challenges/targets";
@@ -22,8 +31,10 @@ import { canChangeState, firstStateIn, initialState, type StateCategory } from "
 import { getChallengeStates } from "@/modules/workflows/queries";
 import { canDeleteEntry, finishOnDay } from "./domain";
 import type { ProgressStatus } from "./labels";
+import { canTakeOffRound, placeOf, waitingPlaceOf } from "./placement";
 import {
   assigneesOf,
+  everyoneGaveUp,
   finishedBy,
   isSettled,
   progressOutcome,
@@ -100,8 +111,13 @@ export type SuggestInput = {
   roundIndex?: number | null;
   /** Group admins: the participant the item is credited to (default: the person adding it). */
   as?: string | null;
-  /** Who already finished an item that goes into a round that is over (default: everyone). */
+  /**
+   * Who already finished an item that goes into a round that is over (default: everyone), or one
+   * added as "Tur dışı" (default: the person it is credited to).
+   */
   finished?: FinishedChoice;
+  /** "Tur dışı": into no round, each person finishes it on their own time (any kind of list). */
+  offRound?: boolean;
 };
 
 const acceptsType = (challenge: { mediaTypes: string[] }, mediaType: string) =>
@@ -142,6 +158,7 @@ export async function suggestEntry(userId: string, input: SuggestInput): Promise
     isAdmin,
   });
   if (!may.ok) throw new AppError(may.reason);
+  if (input.offRound) return addOffRound(userId, creditedId, challenge, input);
 
   const rules = planningRules(challenge);
   const strategy = getStrategy(challenge.strategy);
@@ -249,6 +266,64 @@ export async function suggestEntry(userId: string, input: SuggestInput): Promise
   });
 }
 
+/** The state a "Tur dışı" item is in while people are on it: the workflow's first "active" step. */
+function offRoundState<T extends { category: StateCategory; position: number }>(states: readonly T[]): T {
+  const state = firstStateIn(states, "active");
+  if (!state) throw new AppError("Bu listenin durum akışında “Sürüyor” türünde bir adım yok; öge tur dışına alınamaz.");
+  return state;
+}
+
+/**
+ * "Tur dışı": an item outside the rounds, for everyone taking part, each on their own time. The list's
+ * rule (limits, turns, the pool) doesn't apply, since nothing goes into a round. Usually someone has
+ * already finished it, which `finished` says (default: the person it is credited to).
+ */
+async function addOffRound(
+  userId: string,
+  creditedId: string,
+  challenge: Awaited<ReturnType<typeof requireChallengeAccess>>["challenge"],
+  input: SuggestInput,
+): Promise<string> {
+  const media = await resolveMediaItem(input.media, userId);
+  if (!acceptsType(challenge, media.mediaType)) throw new AppError("Bu liste bu içerik türünü kabul etmiyor.");
+  const states = await getChallengeStates(challenge.id);
+  const active = offRoundState(states);
+
+  return db.transaction(async (tx) => {
+    await lockForAddition(tx, challenge.id, media);
+    const assignees = assigneesOf(null, await activeParticipants(challenge.id, tx));
+    const choice = input.finished ?? "me";
+    const userIds = finishedBy(choice, assignees, creditedId).filter((id) => assignees.includes(id));
+    const done = progressOutcome(assignees, (id) => (userIds.includes(id) ? "completed" : null)) === "done";
+    const state = done ? (firstStateIn(states, "done") ?? active) : active;
+
+    const [entry] = await tx
+      .insert(entries)
+      .values({
+        challengeId: challenge.id,
+        roundId: null,
+        mediaItemId: media.id,
+        stateId: state.id,
+        suggestedBy: creditedId,
+        suggestedFor: null,
+        pitch: input.pitch,
+      })
+      .returning({ id: entries.id });
+    await markFinished(tx, entry.id, userIds, new Date());
+
+    const [credited] = creditedId !== userId ? await tx.select({ name: users.name }).from(users).where(eq(users.id, creditedId)) : [];
+    await logActivity(tx, {
+      groupId: challenge.groupId,
+      challengeId: challenge.id,
+      entryId: entry.id,
+      actorId: userId,
+      type: "entry.suggested",
+      data: { title: formatTitle(media), offRound: true, finished: userIds.length > 0 ? choice : null, as: credited?.name ?? null },
+    });
+    return entry.id;
+  });
+}
+
 /** How far past the chosen round a batch may spill when rounds fill up (open-ended lists). */
 const MAX_SPILL_ROUNDS = 240;
 
@@ -329,7 +404,8 @@ export async function placeEntry(userId: string, entryId: string, roundIndex: nu
   if (challenge.status !== "active") throw new AppError("Liste şu an aktif değil.");
   if (entry.category === "dropped") throw new AppError("Elenen bir ögeyi plana almadan önce durumunu geri al.");
 
-  const isSuggestion = entry.roundId === null;
+  const place = placeOf(entry);
+  const isSuggestion = place === "waiting";
   if (isSuggestion) {
     const participantCount = (await activeParticipants(challenge.id)).length;
     const allowed = canAcceptSuggestion({
@@ -374,7 +450,7 @@ export async function placeEntry(userId: string, entryId: string, roundIndex: nu
       entryId: entry.id,
       actorId: userId,
       type: isSuggestion ? "entry.planned" : "entry.moved",
-      data: { title: entry.title, round: slot.label, accepted: isSuggestion, finished: choice },
+      data: { title: entry.title, round: slot.label, accepted: isSuggestion, finished: choice, fromOffRound: place === "off" },
     });
   });
 }
@@ -439,12 +515,23 @@ export async function changeEntryState(userId: string, entryId: string, stateId:
   });
 }
 
-/** Saves the user's own status and/or rating; returns the status they had before (null: none). */
+export type ProgressResult = {
+  /** The status they had before (null: none), for "Geri al". */
+  previous: ProgressStatus | null;
+  /** The change took a pool candidate out of the pool, to "Tur dışı". */
+  leftPool: boolean;
+};
+
+/**
+ * Saves the user's own status and/or rating. `backToPool` is the "Geri al" of a change that took a
+ * pool candidate out of the pool: with the status put back, the item returns to the pool too.
+ */
 export async function updateProgress(
   userId: string,
   entryId: string,
   patch: { status?: ProgressStatus; rating?: number | null },
-): Promise<ProgressStatus | null> {
+  options: { backToPool?: boolean } = {},
+): Promise<ProgressResult> {
   const { entry, challenge } = await loadEntryContext(entryId, userId);
   const now = new Date();
 
@@ -483,36 +570,180 @@ export async function updateProgress(
   }
 
   const previous = existing?.status ?? null;
-  if (!statusChanged) return previous;
+  if (!statusChanged) return { previous, leftPool: false };
 
   // The entry is done once everyone it is meant for has finished it, and open again when one of
-  // them takes their "finished" back. (A planning list's suggestion waits for a round first.)
+  // them takes their "finished" back (a planning list's suggestion waits for a round first). A pool
+  // candidate someone finished alone leaves the pool; a "Tur dışı" item nobody will finish is dropped.
+  const place = placeOf(entry);
+  const pool = poolRulesOf(challenge) !== null;
   const assignees = assigneesOf(entry.suggestedFor, await activeParticipants(challenge.id));
+  const statusOf = await assigneeStatuses(db, entry.id, assignees);
   const target = stateAfterProgress({
+    place,
     category: entry.category,
-    tracked: entry.roundId !== null || planningRules(challenge) === null,
-    outcome: progressOutcome(assignees, await assigneeStatuses(db, entry.id, assignees)),
+    planning: planningRules(challenge) !== null,
+    pool,
+    outcome: progressOutcome(assignees, statusOf),
+    gaveUp: everyoneGaveUp(assignees, statusOf),
     actorIsAssignee: assignees.includes(userId),
     actorWasSettled: isSettled(previous),
     actorIsSettled: isSettled(status),
   });
-  if (!target) return previous;
   const states = await getChallengeStates(challenge.id);
-  const next = target === "done" ? firstStateIn(states, "done") : initialState(states, "active");
-  if (next && next.id !== entry.stateId) {
+  const base = { groupId: challenge.groupId, challengeId: challenge.id, entryId: entry.id };
+
+  if (!target && options.backToPool && pool && place === "off" && entry.category === "active") {
+    const pending = initialState(states, "pending");
     await db.transaction(async (tx) => {
-      await tx.update(entries).set({ stateId: next.id, stateChangedAt: now }).where(eq(entries.id, entry.id));
-      await logActivity(tx, {
-        groupId: challenge.groupId,
-        challengeId: challenge.id,
-        entryId: entry.id,
-        actorId: null,
-        type: "entry.state_changed",
-        data: { title: entry.title, from: entry.stateLabel, to: next.label, automatic: true, reopened: target === "active" },
-      });
+      await tx.update(entries).set({ stateId: pending.id, stateChangedAt: now }).where(eq(entries.id, entry.id));
+      await logActivity(tx, { ...base, actorId: userId, type: "entry.back_from_off_round", data: { title: entry.title, to: "pool" } });
     });
+    return { previous, leftPool: false };
   }
-  return previous;
+  if (!target) return { previous, leftPool: false };
+
+  const next =
+    target === "done" ? firstStateIn(states, "done") : target === "dropped" ? firstStateIn(states, "dropped") : initialState(states, "active");
+  if (!next || next.id === entry.stateId) return { previous, leftPool: false };
+  const leftPool = place === "waiting" && next.category === "active";
+  await db.transaction(async (tx) => {
+    await tx.update(entries).set({ stateId: next.id, stateChangedAt: now }).where(eq(entries.id, entry.id));
+    await logActivity(
+      tx,
+      leftPool
+        ? { ...base, actorId: null, type: "entry.off_round", data: { title: entry.title, from: "pool", automatic: true } }
+        : {
+            ...base,
+            actorId: null,
+            type: "entry.state_changed",
+            data: {
+              title: entry.title,
+              from: entry.stateLabel,
+              to: next.label,
+              automatic: true,
+              reopened: target === "active",
+              gaveUp: target === "dropped",
+            },
+          },
+    );
+  });
+  return { previous, leftPool };
+}
+
+/** Where an item was before it was taken out of the rounds, for "Geri al". */
+export type Placement = { roundId: string | null; stateId: string };
+
+async function roundLabelOf(challenge: Parameters<typeof roundLabel>[0], roundId: string | null, executor: Executor = db) {
+  if (!roundId) return null;
+  const [round] = await executor
+    .select({ index: rounds.index, startsOn: rounds.startsOn, endsOn: rounds.endsOn })
+    .from(rounds)
+    .where(eq(rounds.id, roundId))
+    .limit(1);
+  return round ? roundLabel(challenge, round) : null;
+}
+
+/**
+ * Takes an item out of its round (or out of the pool / the suggestions) to "Tur dışı": it stays in the
+ * list, nobody waits for a round to do it, and each person finishes it on their own time. A pending
+ * item counts as taken on. Returns where it was, so "Geri al" can put it back.
+ */
+export async function takeOffRound(userId: string, entryId: string): Promise<Placement> {
+  const { entry, challenge, isParticipant, isAdmin } = await loadEntryContext(entryId, userId);
+  if (challenge.status !== "active") throw new AppError("Liste şu an aktif değil.");
+  const place = placeOf(entry);
+  if (place === "off") throw new AppError("Öge zaten tur dışında.");
+  if (place === "dropped") throw new AppError("Elenen bir ögeyi tur dışına almadan önce durumunu geri al.");
+  const allowed = canTakeOffRound({
+    actorId: userId,
+    suggestedBy: entry.suggestedBy,
+    suggestedFor: entry.suggestedFor,
+    place,
+    category: entry.category,
+    isParticipant,
+    isGroupAdmin: isAdmin,
+  });
+  if (!allowed) throw new AppError("Bu ögeyi tur dışına alma yetkin yok.");
+
+  const states = await getChallengeStates(challenge.id);
+  const active = entry.category === "pending" ? offRoundState(states) : null;
+  const round = await roundLabelOf(challenge, entry.roundId);
+  const from = place === "round" ? "round" : poolRulesOf(challenge) ? "pool" : "suggestions";
+  await db.transaction(async (tx) => {
+    await tx
+      .update(entries)
+      .set({ roundId: null, ...(active ? { stateId: active.id, stateChangedAt: new Date() } : {}) })
+      .where(eq(entries.id, entry.id));
+    await logActivity(tx, {
+      groupId: challenge.groupId,
+      challengeId: challenge.id,
+      entryId: entry.id,
+      actorId: userId,
+      type: "entry.off_round",
+      data: { title: entry.title, from, round },
+    });
+  });
+  return { roundId: entry.roundId, stateId: entry.stateId };
+}
+
+/**
+ * Back from "Tur dışı": to `to`, where it was just before ("Geri al"), or else, while it is still
+ * open, to the pool of a pool list or the suggestions of a planning list.
+ */
+export async function returnFromOffRound(userId: string, entryId: string, to?: Placement): Promise<void> {
+  const { entry, challenge, isParticipant, isAdmin } = await loadEntryContext(entryId, userId);
+  if (challenge.status !== "active") throw new AppError("Liste şu an aktif değil.");
+  if (placeOf(entry) !== "off") throw new AppError("Öge tur dışında değil.");
+  if (!isParticipant && !isAdmin && entry.suggestedBy !== userId) throw new AppError("Bu ögeyi geri alma yetkin yok.");
+
+  const states = await getChallengeStates(challenge.id);
+  const planning = planningRules(challenge);
+  const pool = poolRulesOf(challenge);
+  const waiting = waitingPlaceOf({ pool: pool !== null, planning: planning !== null });
+  let target: Placement;
+  if (to) {
+    const state = states.find((candidate) => candidate.id === to.stateId);
+    const fits = state && state.category !== "dropped" && (to.roundId !== null ? true : state.category === "pending" && waiting !== null);
+    if (!fits) throw new AppError("Öge eski yerine alınamadı.");
+    target = to;
+  } else {
+    if (!waiting) throw new AppError("Bu listede tur dışı bir öge yalnızca hemen “Geri al” ile turuna dönebilir.");
+    if (entry.category !== "active") throw new AppError("Biten bir öge geri alınamaz.");
+    target = { roundId: null, stateId: initialState(states, "pending").id };
+  }
+
+  await db.transaction(async (tx) => {
+    let round: string | null = null;
+    if (target.roundId) {
+      const [row] = await tx
+        .select({ id: rounds.id })
+        .from(rounds)
+        .where(and(eq(rounds.id, target.roundId), eq(rounds.challengeId, challenge.id)))
+        .limit(1);
+      if (!row) throw new AppError("Öge eski yerine alınamadı.");
+      // The place it left may have been taken meanwhile.
+      if (planning) await assertRoomInRound(tx, row.id, planning, entry.id);
+      if (pool && (await roomInPoolRound(tx, row.id, pool.picksPerRound)) <= 0) throw new AppError("Bu turun seçimi artık dolu.");
+      round = await roundLabelOf(challenge, row.id, tx);
+    }
+    await tx
+      .update(entries)
+      .set({
+        roundId: target.roundId,
+        stateId: target.stateId,
+        ...(target.stateId !== entry.stateId ? { stateChangedAt: new Date() } : {}),
+      })
+      .where(eq(entries.id, entry.id));
+    await logActivity(tx, {
+      groupId: challenge.groupId,
+      challengeId: challenge.id,
+      entryId: entry.id,
+      actorId: userId,
+      type: "entry.back_from_off_round",
+      data: { title: entry.title, to: target.roundId ? "round" : waiting, round },
+    });
+  });
 }
 
 /** Moves the user's own finish to the day it really happened (they marked it later). */

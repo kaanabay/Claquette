@@ -1,5 +1,6 @@
 import { ArrowRight, Check, Clock, Star, ThumbsUp } from "lucide-react";
 import Link from "next/link";
+import { FilterItem } from "@/components/item-filter";
 import { Badge } from "@/components/ui/badge";
 import { formatShortDate } from "@/lib/short-date";
 import { cn } from "@/lib/utils";
@@ -7,9 +8,13 @@ import { MediaCover } from "@/modules/media/components/media-cover";
 import { MediaTitle } from "@/modules/media/components/media-title";
 import { formatTitle } from "@/modules/media/titles";
 import { formatRating, progressLabel } from "../labels";
+import { OFF_ROUND } from "../placement";
 import type { EntryCard as EntryCardData } from "../queries";
 import { listPeople, type TrackingPerson } from "../tracking";
 import { ProgressToggle } from "./progress-toggle";
+
+/** "İzlemeyeceğim" sits on the card where things tend to linger: "Tur dışı" items and rounds that are over. */
+const canSkipFromCard = (card: EntryCardData) => card.offRound || card.tracking?.overdue === true;
 
 export function EntryCard({
   card,
@@ -33,58 +38,64 @@ export function EntryCard({
   className?: string;
 }) {
   const href = `/entries/${card.id}`;
+  // A "Tur dışı" item is for everyone, so it reads as added rather than "Kaan → Grup".
+  const by = card.offRound && byline === "recipient" ? "added" : byline;
   const meta = [card.media.year, card.media.creators.slice(0, 2).join(", ")].filter(Boolean).join(" · ");
   return (
-    <article data-highlight-id={card.id} className={cn("flex gap-3 rounded-xl border bg-card p-3 shadow-xs", className)}>
-      <Link href={href} className="shrink-0" tabIndex={-1} aria-hidden>
-        <MediaCover src={card.media.imageUrl} title={formatTitle(card.media)} icon={card.media.icon} className="w-16" />
-      </Link>
-      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-        <div className="flex items-start justify-between gap-2">
-          <Link href={href} className="line-clamp-2 font-medium leading-snug hover:underline">
-            <MediaTitle media={card.media} />
-          </Link>
-          {showState ? <Badge tone={card.state.color}>{card.state.label}</Badge> : null}
-        </div>
-        {meta ? <p className="truncate text-xs text-muted-foreground">{meta}</p> : null}
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-          {showChallenge ? <span className="font-medium text-foreground/80">{card.challengeTitle}</span> : null}
-          {showRound && card.roundLabel ? <Badge>{card.roundLabel}</Badge> : null}
-          {roundNote ? <span className="font-medium text-foreground/80">{roundNote}</span> : null}
-          {card.suggestedBy ? (
-            byline === "recipient" ? (
-              <span className="flex items-center gap-1">
-                {card.suggestedBy.name} <ArrowRight className="size-3" /> {card.suggestedFor?.name ?? "Grup"}
+    // A page with a type filter shows the card only while it matches.
+    <FilterItem type={card.media.mediaType}>
+      <article data-highlight-id={card.id} className={cn("flex gap-3 rounded-xl border bg-card p-3 shadow-xs", className)}>
+        <Link href={href} className="shrink-0" tabIndex={-1} aria-hidden>
+          <MediaCover src={card.media.imageUrl} title={formatTitle(card.media)} icon={card.media.icon} className="w-16" />
+        </Link>
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+          <div className="flex items-start justify-between gap-2">
+            <Link href={href} className="line-clamp-2 font-medium leading-snug hover:underline">
+              <MediaTitle media={card.media} />
+            </Link>
+            {showState ? <Badge tone={card.state.color}>{card.state.label}</Badge> : null}
+          </div>
+          {meta ? <p className="truncate text-xs text-muted-foreground">{meta}</p> : null}
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+            {showChallenge ? <span className="font-medium text-foreground/80">{card.challengeTitle}</span> : null}
+            {showRound && card.roundLabel ? <Badge>{card.roundLabel}</Badge> : null}
+            {showRound && card.offRound ? <Badge>{OFF_ROUND}</Badge> : null}
+            {roundNote ? <span className="font-medium text-foreground/80">{roundNote}</span> : null}
+            {card.suggestedBy ? (
+              by === "recipient" ? (
+                <span className="flex items-center gap-1">
+                  {card.suggestedBy.name} <ArrowRight className="size-3" /> {card.suggestedFor?.name ?? "Grup"}
+                </span>
+              ) : (
+                <span>
+                  {card.suggestedBy.name} {by === "added" ? "ekledi" : "önerdi"}
+                </span>
+              )
+            ) : null}
+            <time dateTime={card.createdAt.toISOString()} title="Eklenme tarihi">
+              {formatShortDate(card.createdAt)}
+            </time>
+            {card.stats.avgRating !== null ? (
+              <span className="flex items-center gap-0.5" title={`${card.stats.ratingCount} puan`}>
+                <Star className="size-3 fill-amber-400 text-amber-500" /> {formatRating(card.stats.avgRating)}/10
               </span>
-            ) : (
-              <span>
-                {card.suggestedBy.name} {byline === "added" ? "ekledi" : "önerdi"}
+            ) : null}
+            {card.votes > 0 ? (
+              <span className="flex items-center gap-0.5">
+                <ThumbsUp className="size-3" /> {card.votes}
               </span>
-            )
-          ) : null}
-          <time dateTime={card.createdAt.toISOString()} title="Eklenme tarihi">
-            {formatShortDate(card.createdAt)}
-          </time>
-          {card.stats.avgRating !== null ? (
-            <span className="flex items-center gap-0.5" title={`${card.stats.ratingCount} puan`}>
-              <Star className="size-3 fill-amber-400 text-amber-500" /> {formatRating(card.stats.avgRating)}/10
-            </span>
-          ) : null}
-          {card.votes > 0 ? (
-            <span className="flex items-center gap-0.5">
-              <ThumbsUp className="size-3" /> {card.votes}
-            </span>
-          ) : null}
-          {/* The finish button below already shows "finished" for the viewer. */}
-          {card.mine && !(card.canMark && card.mine.status === "completed") ? (
-            <Badge tone="violet">{progressLabel(card.mine.status, card.media.mediaType)}</Badge>
-          ) : null}
+            ) : null}
+            {/* The buttons below already show "finished" (and "won't", where they offer it) for the viewer. */}
+            {card.mine && !(card.canMark && (card.mine.status === "completed" || (card.mine.status === "skipped" && canSkipFromCard(card)))) ? (
+              <Badge tone="violet">{progressLabel(card.mine.status, card.media.mediaType)}</Badge>
+            ) : null}
+          </div>
+          {card.pitch ? <p className="line-clamp-2 text-sm italic text-muted-foreground">“{card.pitch}”</p> : null}
+          <TrackingRow card={card} />
+          {footer}
         </div>
-        {card.pitch ? <p className="line-clamp-2 text-sm italic text-muted-foreground">“{card.pitch}”</p> : null}
-        <TrackingRow card={card} />
-        {footer}
-      </div>
-    </article>
+      </article>
+    </FilterItem>
   );
 }
 
@@ -112,6 +123,7 @@ function TrackingRow({ card }: { card: EntryCardData }) {
           mediaType={card.media.mediaType}
           status={card.mine?.status ?? null}
           completedAt={card.mine?.completedAt ?? null}
+          canSkip={canSkipFromCard(card)}
           className="ml-auto"
         />
       ) : null}
@@ -129,7 +141,7 @@ function PersonChip({ person, mediaType }: { person: TrackingPerson; mediaType: 
     <Badge
       tone={done ? "emerald" : undefined}
       title={`${person.name}: ${status}`}
-      className={cn(!done && "font-normal", person.status === "dropped" && "line-through")}
+      className={cn(!done && "font-normal", (person.status === "dropped" || person.status === "skipped") && "line-through")}
     >
       {done ? <Check /> : null}
       {firstName}

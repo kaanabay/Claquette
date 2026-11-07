@@ -21,12 +21,13 @@ import { listEntryActivity } from "@/modules/activity/service";
 import { getChallengeAccess, listParticipants } from "@/modules/challenges/context";
 import { todayIn } from "@/modules/challenges/domain/cadence";
 import { canAcceptSuggestion, isPlanStateChangeAllowed } from "@/modules/challenges/domain/plan";
-import { loadSlotOptions, planningRules, roundLabel } from "@/modules/challenges/planning";
+import { loadSlotOptions, planningRules, poolRulesOf, roundLabel } from "@/modules/challenges/planning";
 import { canChangeState, type StateCategory } from "@/modules/workflows/domain";
 import { getChallengeStates } from "@/modules/workflows/queries";
 import { titleColumns } from "@/modules/media/columns";
 import { canDeleteEntry } from "./domain";
 import type { ProgressStatus } from "./labels";
+import { canTakeOffRound, placeOf, waitingPlaceOf } from "./placement";
 import { assigneesOf, roundTiming, trackEntry, type Tracking } from "./tracking";
 
 export type EntryCard = {
@@ -41,6 +42,8 @@ export type EntryCard = {
   roundStartsOn: string | null;
   /** Last day of the item's round; null for an indefinite list's open turn. */
   roundEndsOn: string | null;
+  /** "Tur dışı": taken on outside the rounds, each person finishes it on their own time. */
+  offRound: boolean;
   state: { id: string; label: string; category: StateCategory; color: string; position: number };
   media: {
     title: string;
@@ -180,10 +183,13 @@ export async function loadEntryCards(userId: string, where: SQL | undefined, lim
     const names = new Map(participants.map((participant) => [participant.userId, participant.name]));
     if (row.suggestedForId && row.suggestedForName) names.set(row.suggestedForId, row.suggestedForName);
     const assignees = assigneesOf(row.suggestedForId, participants);
+    const offRound = placeOf({ roundId: row.roundId, category: row.stateCategory }) === "off";
     const timing =
       row.roundId && row.roundStartsOn
         ? roundTiming({ startsOn: row.roundStartsOn, endsOn: row.roundEndsOn, closedAt: row.roundClosedAt }, today(row.timezone))
-        : null;
+        : offRound
+          ? "off"
+          : null;
     const tracking = trackEntry({
       category: row.stateCategory,
       timing,
@@ -206,6 +212,7 @@ export async function loadEntryCards(userId: string, where: SQL | undefined, lim
           : null,
       roundStartsOn: row.roundStartsOn,
       roundEndsOn: row.roundEndsOn,
+      offRound,
       state: {
         id: row.stateId,
         label: row.stateLabel,
@@ -321,7 +328,8 @@ export async function getEntryPage(userId: string, entryId: string) {
 
   const current = states.find((state) => state.id === row.stateId)!;
   const planning = planningRules(access.challenge);
-  const isSuggestion = row.roundId === null;
+  const place = placeOf({ roundId: row.roundId, category: current.category });
+  const isSuggestion = place === "waiting";
   const transitions = states.filter(
     (state) =>
       state.id !== current.id &&
@@ -334,7 +342,7 @@ export async function getEntryPage(userId: string, entryId: string) {
         isParticipant: access.isParticipant,
         isGroupAdmin: access.isAdmin,
       }) &&
-      (!planning || isPlanStateChangeAllowed({ inRound: !isSuggestion, targetCategory: state.category })),
+      (!planning || isPlanStateChangeAllowed({ inRound: row.roundId !== null, targetCategory: state.category })),
   );
 
   const isActiveList = access.challenge.status === "active";
@@ -351,12 +359,13 @@ export async function getEntryPage(userId: string, entryId: string) {
       isGroupAdmin: access.isAdmin,
       participantCount: activeCount,
     });
-  const canMove =
-    planning !== null && !isSuggestion && current.category !== "dropped" && isActiveList && (access.isParticipant || access.isAdmin);
+  // A planned item moves to another round; a "Tur dışı" one goes into one.
+  const canMove = planning !== null && (place === "round" || place === "off") && isActiveList && (access.isParticipant || access.isAdmin);
   const slotOptions = planning && (canAccept || canMove) ? await loadSlotOptions(access.challenge, planning) : [];
   const plan = planning
     ? {
         isSuggestion,
+        isOffRound: place === "off",
         canAccept,
         canMove,
         participantCount: activeCount,
@@ -390,7 +399,9 @@ export async function getEntryPage(userId: string, entryId: string) {
           { startsOn: row.roundStartsOn, endsOn: row.roundEndsOn, closedAt: row.roundClosedAt },
           todayIn(access.challenge.timezone),
         )
-      : null,
+      : place === "off"
+        ? "off"
+        : null,
     people: assignees.map((id) => ({
       id,
       name: nameOf(id),
@@ -409,7 +420,7 @@ export async function getEntryPage(userId: string, entryId: string) {
         row.roundIndex !== null && row.roundStartsOn
           ? roundLabel(access.challenge, { index: row.roundIndex, startsOn: row.roundStartsOn, endsOn: row.roundEndsOn })
           : null,
-      isPoolCandidate: !planning && row.roundId === null && current.category === "pending",
+      isPoolCandidate: !planning && place === "waiting",
       suggestedBy: row.suggestedById ? { id: row.suggestedById, name: row.suggestedByName ?? "?" } : null,
       suggestedFor: row.suggestedForId ? { id: row.suggestedForId, name: row.suggestedForName ?? "?" } : null,
       media: row.media,
@@ -420,6 +431,25 @@ export async function getEntryPage(userId: string, entryId: string) {
     current,
     transitions,
     plan,
+    offRound: {
+      place,
+      canTakeOff:
+        isActiveList &&
+        canTakeOffRound({
+          actorId: userId,
+          suggestedBy: row.suggestedById,
+          suggestedFor: row.suggestedForId,
+          place,
+          category: current.category,
+          isParticipant: access.isParticipant,
+          isGroupAdmin: access.isAdmin,
+        }),
+      // Back to the pool or the suggestions, while it is still open.
+      backTo:
+        place === "off" && current.category === "active" && isActiveList && (access.isParticipant || access.isAdmin)
+          ? waitingPlaceOf({ pool: poolRulesOf(access.challenge) !== null, planning: planning !== null })
+          : null,
+    },
     people,
     assignees,
     tracking,

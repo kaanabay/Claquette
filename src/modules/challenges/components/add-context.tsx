@@ -10,6 +10,7 @@ const GROUPS: { timing: AddContext["rounds"][number]["timing"]; label: string }[
   { timing: "current", label: "Bu tur" },
   { timing: "future", label: "Sıradaki turlar" },
   { timing: "past", label: "Geçmiş turlar" },
+  { timing: "off", label: "Tur dışı" },
 ];
 
 /**
@@ -19,7 +20,9 @@ const GROUPS: { timing: AddContext["rounds"][number]["timing"]; label: string }[
 export function AddContextBar({ rounds, people }: Pick<AddContext, "rounds" | "people">) {
   const router = useRouter();
   const fid = useFieldId();
-  if (rounds.length <= 1 && people.length <= 1) return null;
+  // A single round choice is shown only when it isn't the one selected (e.g. just "Tur dışı" before any round).
+  const roundChoice = rounds.length > 1 || rounds.some((round) => !round.selected);
+  if (!roundChoice && people.length <= 1) return null;
   const go = (href: string | undefined) => {
     if (href) router.replace(href, { scroll: false });
   };
@@ -28,7 +31,7 @@ export function AddContextBar({ rounds, people }: Pick<AddContext, "rounds" | "p
 
   return (
     <div className="flex flex-col gap-3 sm:flex-row">
-      {rounds.length > 1 ? (
+      {roundChoice ? (
         <div className="flex flex-col gap-1.5 sm:flex-1">
           <Label htmlFor={fid("context-round")}>Hangi tur?</Label>
           <NativeSelect

@@ -17,8 +17,9 @@ import { createdAt, updatedAt } from "./columns";
 import { mediaItems } from "./media";
 import { workflowStates } from "./workflows";
 
-// Individual consumption, independent of the group-level workflow state.
-export const progressStatus = pgEnum("progress_status", ["planned", "in_progress", "completed", "dropped"]);
+// Individual consumption, independent of the group-level workflow state. "skipped" is a decision
+// not to start it at all ("İzlemeyeceğim"), "dropped" giving up halfway ("Yarım bıraktım").
+export const progressStatus = pgEnum("progress_status", ["planned", "in_progress", "completed", "dropped", "skipped"]);
 export const noteVisibility = pgEnum("note_visibility", ["private", "shared"]);
 
 // A media item placed into a challenge: the unit that moves through the workflow.

@@ -7,6 +7,7 @@ import { getChallengeAccess } from "@/modules/challenges/context";
 import { todayIn } from "@/modules/challenges/domain/cadence";
 import { planningRules, roundLabel } from "@/modules/challenges/planning";
 import { progressLabel } from "@/modules/entries/labels";
+import { isOffRound, OFF_ROUND } from "@/modules/entries/placement";
 import { getListPage } from "@/modules/lists/queries";
 import { titleColumns } from "@/modules/media/columns";
 import type { ExportDoc } from "./document";
@@ -45,7 +46,7 @@ export async function getListExport(viewerId: string | null, listId: string): Pr
   };
 }
 
-/** Every item of a shared list, round by round (then suggestions or the pool), for its group's members. */
+/** Every item of a shared list, round by round (then suggestions or the pool, then "Tur dışı"), for its group's members. */
 export async function getChallengeExport(userId: string, challengeId: string): Promise<ExportDoc | null> {
   const access = await getChallengeAccess(challengeId, userId);
   if (!access) return null;
@@ -69,6 +70,7 @@ export async function getChallengeExport(userId: string, challengeId: string): P
         type: mediaTypes.label,
         icon: mediaTypes.icon,
         state: workflowStates.label,
+        stateCategory: workflowStates.category,
         addedBy: users.name,
         myStatus: entryProgress.status,
         myRating: entryProgress.rating,
@@ -81,7 +83,12 @@ export async function getChallengeExport(userId: string, challengeId: string): P
       .leftJoin(users, eq(users.id, entries.suggestedBy))
       .leftJoin(entryProgress, and(eq(entryProgress.entryId, entries.id), eq(entryProgress.userId, userId)))
       .where(eq(entries.challengeId, challenge.id))
-      .orderBy(sql`${rounds.index} asc nulls last`, asc(entries.createdAt)),
+      // Without a round: what waits for one (and what was dropped there) first, "Tur dışı" last.
+      .orderBy(
+        sql`${rounds.index} asc nulls last`,
+        sql`case when ${rounds.index} is null and ${workflowStates.category} in ('active', 'done') then 1 else 0 end`,
+        asc(entries.createdAt),
+      ),
     db
       .select({ entryId: entryProgress.entryId, average: avg(entryProgress.rating), total: count(entryProgress.rating) })
       .from(entryProgress)
@@ -102,7 +109,9 @@ export async function getChallengeExport(userId: string, challengeId: string): P
         group:
           row.roundIndex !== null && row.roundStartsOn
             ? roundLabel(challenge, { index: row.roundIndex, startsOn: row.roundStartsOn, endsOn: row.roundEndsOn })
-            : unplaced,
+            : isOffRound({ roundId: null, category: row.stateCategory })
+              ? OFF_ROUND
+              : unplaced,
         rank: null,
         title: row.title,
         originalTitle: row.originalTitle,

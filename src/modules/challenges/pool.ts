@@ -41,6 +41,11 @@ async function openSlots(tx: Transaction, roundId: string, picksPerRound: number
   return picksPerRound - selected;
 }
 
+/** How many places of a pool round are free, with the round locked (an item going back into it). */
+export async function roomInPoolRound(tx: Transaction, roundId: string, picksPerRound: number): Promise<number> {
+  return openSlots(tx, roundId, picksPerRound);
+}
+
 async function moveIntoRound(
   tx: Transaction,
   target: RoundTarget,

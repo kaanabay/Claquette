@@ -1,5 +1,6 @@
 import { ArrowRight, CircleCheck, Clock, Hourglass, Plus, UserPen } from "lucide-react";
 import Link from "next/link";
+import { FilterGroup, FilterItem } from "@/components/item-filter";
 import { Avatar } from "@/components/ui/avatar";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -54,57 +55,61 @@ function RoundRow({ round, data }: { round: RoundView; data: ChallengePageData }
   const addHref = (as?: string) => `/challenges/${data.challenge.id}?add=1&round=${round.index}${as ? `&as=${as}` : ""}`;
   const usesAssignments = round.slots.length > 0;
   const addLabel = past ? (round.items.length > 0 ? "Ekle" : "Doldur") : data.strategy.key === "pool" ? "Ekle" : "Öner";
+  const types = [...round.items, ...round.slots.flatMap((slot) => slot.entries), ...round.extras].map((card) => card.media.mediaType);
 
   return (
-    <li className={cn("rounded-xl border bg-card p-3 shadow-xs sm:p-4", round.summary.total === 0 && "bg-muted/40")}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="font-semibold leading-tight">{round.label}</p>
-          <p className={cn("mt-0.5 text-xs text-muted-foreground", waiting && "text-amber-700 dark:text-amber-300")}>
-            {[past ? "Geçti" : "Sırada", summary].filter(Boolean).join(" · ")}
-          </p>
+    // While the page is filtered by type, only rounds holding such an item show.
+    <FilterGroup types={types}>
+      <li className={cn("rounded-xl border bg-card p-3 shadow-xs sm:p-4", round.summary.total === 0 && "bg-muted/40")}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-semibold leading-tight">{round.label}</p>
+            <p className={cn("mt-0.5 text-xs text-muted-foreground", waiting && "text-amber-700 dark:text-amber-300")}>
+              {[past ? "Geçti" : "Sırada", summary].filter(Boolean).join(" · ")}
+            </p>
+          </div>
+          {!usesAssignments && round.canAdd ? (
+            <Link href={addHref()} className={buttonVariants({ variant: round.items.length > 0 ? "ghost" : "outline", size: "sm" })}>
+              <Plus /> {addLabel}
+            </Link>
+          ) : null}
         </div>
-        {!usesAssignments && round.canAdd ? (
-          <Link href={addHref()} className={buttonVariants({ variant: round.items.length > 0 ? "ghost" : "outline", size: "sm" })}>
-            <Plus /> {addLabel}
-          </Link>
-        ) : null}
-      </div>
-      {usesAssignments || round.items.length > 0 ? (
-        <ul className="mt-3 flex flex-col gap-2">
-          {round.slots.map((slot) => (
-            <PickRow key={slot.key} pickerId={slot.pickerId} pickerName={slot.pickerName} recipientName={slot.recipientName} entries={slot.entries}>
-              {slot.add === "own" ? (
-                <Link href={addHref()} className={buttonVariants({ variant: slot.entries.length > 0 ? "ghost" : "outline", size: "sm" })}>
-                  <Plus /> {past ? "Ekle" : "Öner"}
-                </Link>
-              ) : slot.add === "behalf" ? (
-                <Link
-                  href={addHref(slot.pickerId)}
-                  title={`${slot.pickerName} adına ekle`}
-                  className={buttonVariants({ variant: "ghost", size: "sm" })}
-                >
-                  <UserPen /> Adına ekle
-                </Link>
-              ) : slot.entries.length === 0 ? (
-                <span className="text-muted-foreground">{past ? "Girilmemiş" : "Öneri bekleniyor"}</span>
-              ) : null}
-            </PickRow>
-          ))}
-          {(usesAssignments ? round.extras : round.items).map((card) => (
-            <PickRow
-              key={card.id}
-              pickerId={card.suggestedBy?.id ?? card.id}
-              pickerName={card.suggestedBy?.name ?? "Silinmiş kullanıcı"}
-              recipientName={card.suggestedFor?.name ?? null}
-              entries={[card]}
-            />
-          ))}
-        </ul>
-      ) : (
-        <p className="mt-2 text-sm text-muted-foreground">{past ? "Bu tura bir şey girilmemiş." : "Henüz bir şey yok."}</p>
-      )}
-    </li>
+        {usesAssignments || round.items.length > 0 ? (
+          <ul className="mt-3 flex flex-col gap-2">
+            {round.slots.map((slot) => (
+              <PickRow key={slot.key} pickerId={slot.pickerId} pickerName={slot.pickerName} recipientName={slot.recipientName} entries={slot.entries}>
+                {slot.add === "own" ? (
+                  <Link href={addHref()} className={buttonVariants({ variant: slot.entries.length > 0 ? "ghost" : "outline", size: "sm" })}>
+                    <Plus /> {past ? "Ekle" : "Öner"}
+                  </Link>
+                ) : slot.add === "behalf" ? (
+                  <Link
+                    href={addHref(slot.pickerId)}
+                    title={`${slot.pickerName} adına ekle`}
+                    className={buttonVariants({ variant: "ghost", size: "sm" })}
+                  >
+                    <UserPen /> Adına ekle
+                  </Link>
+                ) : slot.entries.length === 0 ? (
+                  <span className="text-muted-foreground">{past ? "Girilmemiş" : "Öneri bekleniyor"}</span>
+                ) : null}
+              </PickRow>
+            ))}
+            {(usesAssignments ? round.extras : round.items).map((card) => (
+              <PickRow
+                key={card.id}
+                pickerId={card.suggestedBy?.id ?? card.id}
+                pickerName={card.suggestedBy?.name ?? "Silinmiş kullanıcı"}
+                recipientName={card.suggestedFor?.name ?? null}
+                entries={[card]}
+              />
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-2 text-sm text-muted-foreground">{past ? "Bu tura bir şey girilmemiş." : "Henüz bir şey yok."}</p>
+        )}
+      </li>
+    </FilterGroup>
   );
 }
 
@@ -132,18 +137,20 @@ function PickRow({
       </span>
       <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
         {entries.map((card) => (
-          <span key={card.id} className="flex items-center gap-1.5">
-            {card.state.category === "done" ? (
-              <CircleCheck className="size-4 shrink-0 text-success" aria-label="Bitti" />
-            ) : card.tracking?.overdue ? (
-              <Clock className="size-4 shrink-0 text-amber-600 dark:text-amber-400" aria-label="Zamanı geçti" />
-            ) : card.state.category === "pending" ? (
-              <Hourglass className="size-4 shrink-0 text-muted-foreground" aria-label="Cevap bekliyor" />
-            ) : null}
-            <Link href={`/entries/${card.id}`} className="hover:underline">
-              <MediaTitle media={card.media} />
-            </Link>
-          </span>
+          <FilterItem key={card.id} type={card.media.mediaType}>
+            <span className="flex items-center gap-1.5">
+              {card.state.category === "done" ? (
+                <CircleCheck className="size-4 shrink-0 text-success" aria-label="Bitti" />
+              ) : card.tracking?.overdue ? (
+                <Clock className="size-4 shrink-0 text-amber-600 dark:text-amber-400" aria-label="Zamanı geçti" />
+              ) : card.state.category === "pending" ? (
+                <Hourglass className="size-4 shrink-0 text-muted-foreground" aria-label="Cevap bekliyor" />
+              ) : null}
+              <Link href={`/entries/${card.id}`} className="hover:underline">
+                <MediaTitle media={card.media} />
+              </Link>
+            </span>
+          </FilterItem>
         ))}
         {children}
       </span>

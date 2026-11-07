@@ -14,10 +14,12 @@ import {
   unplanEntryAction,
   updateProgressAction,
 } from "../actions";
-import { PROGRESS_STATUSES, progressLabel, type ProgressStatus } from "../labels";
+import { progressLabel, type ProgressStatus } from "../labels";
 import type { EntryPageData } from "../queries";
 import { FinishedOnEditor } from "./finished-on-editor";
 import { NoteForm } from "./note-form";
+import { ReturnFromOffRoundButton, TakeOffRoundButton } from "./off-round-buttons";
+import { ProgressButtons } from "./progress-buttons";
 
 export function StateActions({
   entryId,
@@ -74,6 +76,25 @@ export function PlanActions({
   dropped: boolean;
 }) {
   if (dropped) return null;
+  if (plan.isOffRound) {
+    return plan.canMove ? (
+      <div className="flex flex-col gap-2">
+        <p className="text-sm">Bir tura al</p>
+        <PlaceForm
+          entryId={entryId}
+          options={plan.options}
+          defaultIndex={plan.defaultIndex}
+          askFinished={plan.askFinished}
+          participantCount={plan.participantCount}
+          label={
+            <>
+              <CalendarPlus /> Tura al
+            </>
+          }
+        />
+      </div>
+    ) : null;
+  }
   if (plan.isSuggestion) {
     return plan.canAccept ? (
       <div className="flex flex-col gap-2">
@@ -128,33 +149,47 @@ export function PlanActions({
   );
 }
 
+/**
+ * "Tur dışı": an item taken out of the rounds stays in the list and everyone finishes it on their own
+ * time. Offers taking it out, or bringing it back to the pool / the suggestions while it is open.
+ */
+export function OffRoundActions({ entryId, title, offRound }: { entryId: string; title: string; offRound: EntryPageData["offRound"] }) {
+  if (offRound.place === "off") {
+    return (
+      <div className="flex flex-col items-start gap-2">
+        <p className="text-sm text-muted-foreground">Turlara girmez; herkes kendi zamanında bitirip işaretler. Herkes bitirince ya da pas geçince tamamlanır.</p>
+        {offRound.backTo ? <ReturnFromOffRoundButton entryId={entryId} title={title} to={offRound.backTo} /> : null}
+      </div>
+    );
+  }
+  if (!offRound.canTakeOff) return null;
+  return (
+    <div className="flex flex-col items-start gap-1.5 border-t pt-3">
+      <TakeOffRoundButton entryId={entryId} title={title} />
+      <p className="text-xs text-muted-foreground">
+        {offRound.place === "round"
+          ? "Turundan çıkar ama listede kalır; herkes kendi zamanında bitirir. Ör. sadece biriniz izlediyse."
+          : "Turlara girmez ama listede kalır; herkes kendi zamanında bitirir. Ör. sadece biriniz izlediyse."}
+      </p>
+    </div>
+  );
+}
+
 export function ProgressPanel({
   entryId,
+  title,
   mediaType,
   mine,
 }: {
   entryId: string;
+  title: string;
   mediaType: string;
   mine: { status: ProgressStatus; rating: number | null; completedAt: Date | null } | null;
 }) {
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-3">
-        <ActionForm action={updateProgressAction} className="flex flex-wrap gap-2">
-          <input type="hidden" name="entryId" value={entryId} />
-          {PROGRESS_STATUSES.map((status) => (
-            <SubmitButton
-              key={status}
-              name="status"
-              value={status}
-              size="sm"
-              variant={mine?.status === status ? "default" : "outline"}
-              aria-pressed={mine?.status === status}
-            >
-              {progressLabel(status, mediaType)}
-            </SubmitButton>
-          ))}
-        </ActionForm>
+        <ProgressButtons entryId={entryId} title={title} mediaType={mediaType} status={mine?.status ?? null} />
         {mine?.status === "completed" ? <FinishedOnEditor entryId={entryId} completedAt={mine.completedAt} /> : null}
       </div>
       <div className="flex flex-col gap-2">

@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+import { ItemFilterProvider, TypeFilterBar, type TypeCount } from "@/components/item-filter";
 import { BackLink, PageSkeleton } from "@/components/page-skeleton";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -51,6 +52,7 @@ async function ListContent({ params, searchParams }: Pick<PageProps<"/lists/[lis
   const data = await getListPage(user?.id ?? null, listId, { sort: isSortKey(query.sort) ? query.sort : undefined });
   if (!data) notFound();
   const { list, items, isOwner, sort } = data;
+  const typeCounts = countTypes(items);
 
   if (!isOwner) {
     return (
@@ -66,12 +68,17 @@ async function ListContent({ params, searchParams }: Pick<PageProps<"/lists/[lis
           </p>
           {list.description ? <p className="max-w-2xl whitespace-pre-line text-muted-foreground">{list.description}</p> : null}
         </header>
-        {items.length > 1 ? (
-          <div className="flex justify-end">
-            <SortSelect value={sort} options={SORTS} />
-          </div>
-        ) : null}
-        <ListView items={items} isRanked={list.isRanked} manual={sort === "manual"} />
+        <ItemFilterProvider>
+          {items.length > 1 ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <TypeFilterBar types={typeCounts} />
+              <div className="ml-auto">
+                <SortSelect value={sort} options={SORTS} />
+              </div>
+            </div>
+          ) : null}
+          <ListView items={items} isRanked={list.isRanked} manual={sort === "manual"} />
+        </ItemFilterProvider>
         {!user ? (
           <Card>
             <CardContent className="flex flex-col items-start gap-3 pt-5 sm:flex-row sm:items-center sm:justify-between">
@@ -141,24 +148,38 @@ async function ListContent({ params, searchParams }: Pick<PageProps<"/lists/[lis
             </CardContent>
           </Card>
           <section>
-            <SectionTitle action={items.length > 1 ? <SortSelect value={sort} options={SORTS} save={setListSortAction.bind(null, list.id)} /> : null}>
-              Ögeler <span className="font-normal text-muted-foreground">({items.length})</span>
-            </SectionTitle>
-            {items.length > 0 ? (
-              <>
-                <p className="mb-3 text-xs text-muted-foreground">
-                  {sort === "manual"
-                    ? "Sırayı değiştirmek için soldaki tutamacı sürükle. Tarihe göre sıralamak için yukarıdan seç; seçimin listeyi açan herkes için geçerli olur."
-                    : "Liste seçtiğin sıralamayla gösteriliyor; listeyi açan herkes böyle görür. Sürükleyerek sıralamak için “Elle”yi seç."}
-                </p>
-                <ListItemsEditor listId={list.id} isRanked={list.isRanked} sort={sort} items={items} shareTargets={data.shareTargets} />
-              </>
-            ) : (
-              <EmptyState title="Liste boş">Yukarıdan ilk ögeyi ekle.</EmptyState>
-            )}
+            <ItemFilterProvider>
+              <SectionTitle action={items.length > 1 ? <SortSelect value={sort} options={SORTS} save={setListSortAction.bind(null, list.id)} /> : null}>
+                Ögeler <span className="font-normal text-muted-foreground">({items.length})</span>
+              </SectionTitle>
+              {items.length > 0 ? (
+                <>
+                  <TypeFilterBar types={typeCounts} className="mb-3" />
+                  <p className="mb-3 text-xs text-muted-foreground">
+                    {sort === "manual"
+                      ? "Sırayı değiştirmek için soldaki tutamacı sürükle. Tarihe göre sıralamak için yukarıdan seç; seçimin listeyi açan herkes için geçerli olur."
+                      : "Liste seçtiğin sıralamayla gösteriliyor; listeyi açan herkes böyle görür. Sürükleyerek sıralamak için “Elle”yi seç."}
+                  </p>
+                  <ListItemsEditor listId={list.id} isRanked={list.isRanked} sort={sort} items={items} shareTargets={data.shareTargets} />
+                </>
+              ) : (
+                <EmptyState title="Liste boş">Yukarıdan ilk ögeyi ekle.</EmptyState>
+              )}
+            </ItemFilterProvider>
           </section>
         </div>
       </div>
     </div>
   );
+}
+
+/** The media types a list holds, most common first, for its type filter. */
+function countTypes(items: readonly { media: { mediaType: string }; type: { icon: string; label: string } }[]): TypeCount[] {
+  const counts = new Map<string, TypeCount>();
+  for (const item of items) {
+    const known = counts.get(item.media.mediaType);
+    if (known) known.count += 1;
+    else counts.set(item.media.mediaType, { slug: item.media.mediaType, label: item.type.label, icon: item.type.icon, count: 1 });
+  }
+  return [...counts.values()].sort((a, b) => b.count - a.count);
 }

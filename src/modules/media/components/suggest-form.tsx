@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarCheck, Lightbulb, Send } from "lucide-react";
+import { CalendarCheck, CalendarOff, Lightbulb, Send } from "lucide-react";
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label, NativeSelect, Textarea } from "@/components/ui/fields";
@@ -12,7 +12,7 @@ import { useFormAction } from "@/components/ui/use-form-action";
 import { cn } from "@/lib/utils";
 import { describeSlotOption, type SlotTiming } from "@/modules/challenges/domain/plan";
 import { suggestEntryAction } from "@/modules/entries/actions";
-import { finishedChoices, groupAudience, type FinishedAudience } from "@/modules/entries/labels";
+import { finishedChoices, groupAudience, offRoundChoices, type FinishedAudience } from "@/modules/entries/labels";
 import { itemKey, type ExistingMedia } from "../keys";
 import { formatTitle } from "../titles";
 import { pickFromCatalog, type CatalogPick, type MediaTypeOption } from "../types";
@@ -24,11 +24,12 @@ type Props = {
   challengeId: string;
   mediaTypes: MediaTypeOption[];
   targets: { id: string | null; name: string }[];
-  placement: "round" | "pool" | "plan";
+  /** "off": "Tur dışı", into no round (planning lists offer it among their own choices). */
+  placement: "round" | "pool" | "plan" | "off";
   plan?: {
     options: RoundChoice[];
     defaultIndex: number | null;
-    defaultMode: "plan" | "suggest";
+    defaultMode: "plan" | "suggest" | "off";
     /** Items per round; null = no limit. */
     capacity: number | null;
     participantCount: number;
@@ -43,6 +44,8 @@ type Props = {
     credited: { id: string; name: string; isViewer: boolean };
     /** For a round that is over: how "who finished it?" asks about each possible recipient. */
     audiences: { recipientId: string | null; audience: FinishedAudience }[];
+    /** People taking part, for "who finished it?" about a "Tur dışı" item. */
+    participantCount: number;
   } | null;
   picks?: CatalogPick[];
   preselected?: CatalogPick | null;
@@ -73,6 +76,7 @@ const SUBMIT_LABELS = {
   past: ["Geçmişe ekle", "ögeyi geçmişe ekle"],
   behalf: ["Adına ekle", "ögeyi adına ekle"],
   poolRound: ["Tura ekle", "ögeyi tura ekle"],
+  off: ["Tur dışına ekle", "ögeyi tur dışına ekle"],
 } as const;
 
 function SuggestFormInner({
@@ -96,7 +100,7 @@ function SuggestFormInner({
   const [manualFilled, setManualFilled] = useState(false);
   const [manualKey, setManualKey] = useState(0);
   const [handled, setHandled] = useState(state);
-  const [planMode, setPlanMode] = useState<"plan" | "suggest">(plan?.defaultMode ?? "suggest");
+  const [planMode, setPlanMode] = useState<"plan" | "suggest" | "off">(plan?.defaultMode ?? "suggest");
   const [roundIndex, setRoundIndex] = useState<string>(plan?.defaultIndex !== null && plan?.defaultIndex !== undefined ? String(plan.defaultIndex) : "");
   const [recipientId, setRecipientId] = useState(targets[0]?.id ?? "");
 
@@ -127,6 +131,8 @@ function SuggestFormInner({
   const planning = isPlan && plan ? plan : null;
   const chosen = planning?.options.find((option) => String(option.index) === roundIndex);
   const intoPlan = planning !== null && planMode === "plan";
+  // "Tur dışı": chosen in the panel above, or among a planning list's choices.
+  const off = placement === "off" || (planning !== null && planMode === "off");
   const count = picked.length + (manualFilled ? 1 : 0);
   // A round of a list without planning (or a pool round), and whose item it is.
   const round = !isPlan && placement === "round" ? (context?.round ?? null) : null;
@@ -135,9 +141,9 @@ function SuggestFormInner({
   const onBehalf = context ? !context.credited.isViewer : false;
   const who = onBehalf ? context?.credited.name.split(" ")[0] : null;
   const [one, many] = SUBMIT_LABELS[
-    isPlan ? (intoPlan ? "plan" : "suggest") : past ? "past" : onBehalf ? "behalf" : poolRound ? "poolRound" : placement
+    off ? "off" : isPlan ? (intoPlan ? "plan" : "suggest") : past ? "past" : onBehalf ? "behalf" : poolRound ? "poolRound" : placement
   ];
-  const question = isPlan
+  const question = isPlan || off
     ? who
       ? `${who} adına ne ekliyorsun?`
       : "Ne ekliyorsun?"
@@ -202,6 +208,19 @@ function SuggestFormInner({
             <PitchField intoPlan={past || onBehalf || poolRound} errors={errors.pitch} many={count > 1} />
           </CardContent>
         </Card>
+      ) : placement === "off" ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Tur dışı</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <input type="hidden" name="offRound" value="1" />
+            <input type="hidden" name="recipientId" value="" />
+            {onBehalf && context ? <p className="text-xs text-muted-foreground">Öge {context.credited.name} adına girer.</p> : null}
+            {context ? <OffRoundFinishedField participantCount={context.participantCount} credited={context.credited} /> : null}
+            <PitchField intoPlan errors={errors.pitch} many={count > 1} />
+          </CardContent>
+        </Card>
       ) : isPlan ? (
         <Card>
           <CardHeader>
@@ -234,7 +253,7 @@ function SuggestFormInner({
                 <input
                   type="radio"
                   name="planChoice"
-                  checked={!intoPlan}
+                  checked={!intoPlan && !off}
                   onChange={() => setPlanMode("suggest")}
                   className="sr-only"
                 />
@@ -244,7 +263,16 @@ function SuggestFormInner({
                   <span className="block text-xs text-muted-foreground">Diğerleri kabul edip bir tura yerleştirene kadar bekler.</span>
                 </span>
               </label>
+              <label className={pill}>
+                <input type="radio" name="planChoice" checked={off} onChange={() => setPlanMode("off")} className="sr-only" />
+                <CalendarOff className="mt-0.5 size-4 shrink-0 text-primary" />
+                <span>
+                  <span className="block font-medium">Tur dışı</span>
+                  <span className="block text-xs text-muted-foreground">Turlara girmez; herkes kendi zamanında bitirir.</span>
+                </span>
+              </label>
             </div>
+            {off ? <input type="hidden" name="offRound" value="1" /> : null}
 
             {intoPlan && planning ? (
               <div className="flex flex-col gap-2">
@@ -278,7 +306,8 @@ function SuggestFormInner({
             {intoPlan && planning && chosen?.timing === "past" ? (
               <FinishedField audience={groupAudience(planning.participantCount)} />
             ) : null}
-            <PitchField intoPlan={intoPlan} errors={errors.pitch} many={count > 1} />
+            {off && context ? <OffRoundFinishedField participantCount={context.participantCount} credited={context.credited} /> : null}
+            <PitchField intoPlan={intoPlan || off} errors={errors.pitch} many={count > 1} />
           </CardContent>
         </Card>
       ) : (
@@ -379,6 +408,35 @@ function FinishedField({ audience }: { audience: FinishedAudience }) {
       </div>
       <p className="text-xs text-muted-foreground">
         Öge, ait olduğu herkes bitirince “Tamamlandı” olur; bitirmeyen varsa “Zamanı geçti” diye görünür.
+      </p>
+    </fieldset>
+  );
+}
+
+/** "Who finished it?" for a "Tur dışı" item: usually only the person adding it, which is why it stays out of the rounds. */
+function OffRoundFinishedField({
+  participantCount,
+  credited,
+}: {
+  participantCount: number;
+  credited: { isViewer: boolean; name: string };
+}) {
+  return (
+    <fieldset className="flex flex-col gap-2">
+      <legend className="mb-2 text-sm font-medium">Kim bitirdi?</legend>
+      <div className="flex flex-wrap gap-2">
+        {offRoundChoices({ participantCount, credited }).map((choice, index) => (
+          <label
+            key={choice.value}
+            className="flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm has-[:checked]:border-primary has-[:checked]:bg-accent"
+          >
+            <input type="radio" name="finished" value={choice.value} defaultChecked={index === 0} className="accent-primary" />
+            {choice.label}
+          </label>
+        ))}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Tur dışı ögeler turlara girmez; herkes kendi zamanında bitirip işaretler. Herkes bitirince ya da pas geçince tamamlanır.
       </p>
     </fieldset>
   );

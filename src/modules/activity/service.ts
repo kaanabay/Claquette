@@ -23,6 +23,8 @@ export type ActivityType =
   | "entry.recorded"
   | "entry.moved"
   | "entry.unplanned"
+  | "entry.off_round"
+  | "entry.back_from_off_round"
   | "entry.deleted"
   | "progress.updated"
   | "note.added"

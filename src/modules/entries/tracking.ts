@@ -2,11 +2,15 @@
 // are done. An entry completes once everyone it is meant for has finished it (or set it aside);
 // a round that ended while someone is still to go makes the entry "overdue". Overdue is derived
 // from dates and progress on every read, never stored, so it clears the moment the last one finishes.
+// "Tur dışı" items (see placement.ts) are tracked the same way, without a date.
 
 import type { StateCategory } from "@/modules/workflows/domain";
 import type { ProgressStatus } from "./labels";
+import type { Place } from "./placement";
 
 export type RoundTiming = "past" | "current" | "future";
+/** When a tracked item is due: by its round, or never ("off": "Tur dışı"). */
+export type TrackTiming = RoundTiming | "off";
 
 /** Where a round sits relative to `today` (YYYY-MM-DD in the group's time zone). */
 export function roundTiming(round: { startsOn: string; endsOn: string | null; closedAt: Date | null }, today: string): RoundTiming {
@@ -14,8 +18,9 @@ export function roundTiming(round: { startsOn: string; endsOn: string | null; cl
   return round.startsOn > today ? "future" : "current";
 }
 
-/** Finished it, or set it aside ("Yarım bıraktım"): either way nobody waits for this person. */
-export const isSettled = (status: ProgressStatus | null | undefined) => status === "completed" || status === "dropped";
+/** Finished it, set it aside ("Yarım bıraktım") or passed ("İzlemeyeceğim"): either way nobody waits for this person. */
+export const isSettled = (status: ProgressStatus | null | undefined) =>
+  status === "completed" || status === "dropped" || status === "skipped";
 
 /** Who an entry is meant for: its recipient, or everyone taking part in the list. */
 export function assigneesOf(suggestedFor: string | null, participants: readonly { userId: string }[]): string[] {
@@ -36,24 +41,46 @@ export function progressOutcome(
   return assignees.some((userId) => statusOf(userId) === "completed") ? "done" : null;
 }
 
+/** Everyone it is meant for is done with it and nobody finished it: nobody will. */
+export function everyoneGaveUp(
+  assignees: readonly string[],
+  statusOf: (userId: string) => ProgressStatus | null | undefined,
+): boolean {
+  return (
+    assignees.length > 0 &&
+    assignees.every((userId) => isSettled(statusOf(userId))) &&
+    !assignees.some((userId) => statusOf(userId) === "completed")
+  );
+}
+
 /**
  * The category an entry moves to after someone changed their own progress, or null to leave it.
  * Completion follows the assignees; an assignee taking back their "finished" reopens a done entry.
- * Other changes leave a state set by hand alone.
+ * A pool candidate that someone finished (or passed on) alone leaves the pool for "Tur dışı": a round
+ * is for something you do together. A "Tur dışı" item that nobody will finish is dropped, as nothing
+ * else would ever close it. Other changes leave a state set by hand alone.
  */
 export function stateAfterProgress(input: {
+  place: Place;
   category: StateCategory;
-  /** False for planning suggestions: nothing counts before they are in a round. */
-  tracked: boolean;
+  /** Planning lists: their suggestions count for nothing before they are in a round. */
+  planning: boolean;
+  pool: boolean;
   outcome: "done" | "open" | null;
+  gaveUp: boolean;
   actorIsAssignee: boolean;
   actorWasSettled: boolean;
   actorIsSettled: boolean;
-}): "done" | "active" | null {
-  if (!input.tracked) return null;
+}): "done" | "active" | "dropped" | null {
+  const tracked = input.place === "round" || input.place === "off" || (input.place === "waiting" && !input.planning);
+  if (!tracked) return null;
   if (input.outcome === "done" && (input.category === "pending" || input.category === "active")) return "done";
   const tookBack = input.actorIsAssignee && input.actorWasSettled && !input.actorIsSettled;
-  return input.outcome === "open" && input.category === "done" && tookBack ? "active" : null;
+  if (input.outcome === "open" && input.category === "done" && tookBack) return "active";
+  if (input.place === "off" && input.category === "active" && input.gaveUp) return "dropped";
+  const settledAlone = input.actorIsAssignee && !input.actorWasSettled && input.actorIsSettled;
+  if (input.pool && input.place === "waiting" && settledAlone) return input.gaveUp ? "dropped" : "active";
+  return null;
 }
 
 /** "Who finished?" when an item goes into a round that is already over. */
@@ -79,20 +106,20 @@ export type Tracking = {
   people: TrackingPerson[];
   /** Assignees still to finish it (empty once the entry is done). */
   waiting: TrackingPerson[];
-  timing: RoundTiming;
+  timing: TrackTiming;
   /** The round is over and someone is still to go. */
   overdue: boolean;
 };
 
 /**
- * How an entry stands for the people it is meant for. Only items in a round that the group took
- * on are tracked: suggestions, pool candidates, unanswered personal suggestions and dropped items
- * return null.
+ * How an entry stands for the people it is meant for. Only items the group took on are tracked:
+ * those in a round and "Tur dışı" ones. Suggestions, pool candidates, unanswered personal
+ * suggestions and dropped items return null.
  */
 export function trackEntry(input: {
   category: StateCategory;
-  /** Timing of the entry's round; null when it isn't in one. */
-  timing: RoundTiming | null;
+  /** Timing of the entry's round, "off" for a "Tur dışı" item; null when it is waiting for a round. */
+  timing: TrackTiming | null;
   people: readonly TrackingPerson[];
 }): Tracking | null {
   if (input.timing === null || input.category === "pending" || input.category === "dropped") return null;

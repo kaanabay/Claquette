@@ -1,5 +1,6 @@
 import { CalendarPlus, Lightbulb, Plus, Undo2, X } from "lucide-react";
 import Link from "next/link";
+import { FilterEmpty, FilteredCount, FilterGroup } from "@/components/item-filter";
 import { ActionForm } from "@/components/ui/action-form";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -8,6 +9,8 @@ import { SubmitButton } from "@/components/ui/submit-button";
 import { cn } from "@/lib/utils";
 import { changeEntryStateAction } from "@/modules/entries/actions";
 import { EntryCard } from "@/modules/entries/components/entry-card";
+import { TakeOffRoundButton } from "@/modules/entries/components/off-round-buttons";
+import { formatTitle } from "@/modules/media/titles";
 import { describeRoundSummary, summarizeRound } from "@/modules/entries/tracking";
 import type { ChallengePageData } from "../queries";
 import { daysLeft } from "../timeline";
@@ -77,45 +80,48 @@ function SlotRow({ slot, data }: { slot: PlanSlotView; data: ChallengePageData }
   const canAdd = plan.canEdit && !slot.isFull;
 
   return (
-    <li
-      className={cn(
-        "rounded-xl border bg-card p-3 shadow-xs sm:p-4",
-        slot.timing === "current" && "border-primary/70 ring-1 ring-primary/30",
-        slot.timing === "past" && slot.entries.length === 0 && "bg-muted/40",
-      )}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="font-semibold leading-tight">{slot.label}</p>
-          <p
-            className={cn(
-              "mt-0.5 text-xs",
-              slot.timing === "current" ? "font-medium text-foreground" : "text-muted-foreground",
-              isOverdue(slot) && "text-amber-700 dark:text-amber-300",
-            )}
-          >
-            {status}
-          </p>
+    // While the page is filtered by type, only rounds holding such an item show.
+    <FilterGroup types={slot.entries.map((card) => card.media.mediaType)}>
+      <li
+        className={cn(
+          "rounded-xl border bg-card p-3 shadow-xs sm:p-4",
+          slot.timing === "current" && "border-primary/70 ring-1 ring-primary/30",
+          slot.timing === "past" && slot.entries.length === 0 && "bg-muted/40",
+        )}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-semibold leading-tight">{slot.label}</p>
+            <p
+              className={cn(
+                "mt-0.5 text-xs",
+                slot.timing === "current" ? "font-medium text-foreground" : "text-muted-foreground",
+                isOverdue(slot) && "text-amber-700 dark:text-amber-300",
+              )}
+            >
+              {status}
+            </p>
+          </div>
+          {canAdd ? (
+            <Link
+              href={`/challenges/${data.challenge.id}?add=1&round=${slot.index}`}
+              className={buttonVariants({ variant: slot.entries.length ? "ghost" : "outline", size: "sm" })}
+            >
+              <Plus /> {slot.entries.length ? "Ekle" : "Doldur"}
+            </Link>
+          ) : null}
         </div>
-        {canAdd ? (
-          <Link
-            href={`/challenges/${data.challenge.id}?add=1&round=${slot.index}`}
-            className={buttonVariants({ variant: slot.entries.length ? "ghost" : "outline", size: "sm" })}
-          >
-            <Plus /> {slot.entries.length ? "Ekle" : "Doldur"}
-          </Link>
-        ) : null}
-      </div>
-      {slot.entries.length > 0 ? (
-        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {slot.entries.map((card) => (
-            <EntryCard key={card.id} card={card} showRound={false} byline="added" className="shadow-none" />
-          ))}
-        </div>
-      ) : (
-        <p className="mt-2 text-sm text-muted-foreground">{slot.timing === "past" ? "Bu tura bir şey girilmemiş." : "Henüz belirlenmedi."}</p>
-      )}
-    </li>
+        {slot.entries.length > 0 ? (
+          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {slot.entries.map((card) => (
+              <EntryCard key={card.id} card={card} showRound={false} byline="added" className="shadow-none" />
+            ))}
+          </div>
+        ) : (
+          <p className="mt-2 text-sm text-muted-foreground">{slot.timing === "past" ? "Bu tura bir şey girilmemiş." : "Henüz belirlenmedi."}</p>
+        )}
+      </li>
+    </FilterGroup>
   );
 }
 
@@ -137,7 +143,10 @@ export function SuggestionsPanel({ data }: { data: ChallengePageData }) {
           ) : null
         }
       >
-        Öneriler <span className="font-normal text-muted-foreground">({suggestions.length})</span>
+        Öneriler{" "}
+        <span className="font-normal text-muted-foreground">
+          (<FilteredCount types={suggestions.map(({ card }) => card.media.mediaType)} />)
+        </span>
       </SectionTitle>
       <p className="mb-4 text-sm text-muted-foreground">
         Aklına gelen ama henüz konuşmadığınız şeyler burada bekler. Listedeki başka biri kabul edip bir tura yerleştirir.
@@ -190,6 +199,7 @@ export function SuggestionsPanel({ data }: { data: ChallengePageData }) {
                           </SubmitButton>
                         </ActionForm>
                       ) : null}
+                      <TakeOffRoundButton entryId={card.id} title={formatTitle(card.media)} variant="ghost" className="self-start" />
                     </div>
                   ) : null
                 }
@@ -198,6 +208,7 @@ export function SuggestionsPanel({ data }: { data: ChallengePageData }) {
           })}
         </div>
       )}
+      <FilterEmpty types={suggestions.map(({ card }) => card.media.mediaType)} />
     </section>
   );
 }
@@ -210,7 +221,9 @@ export function DroppedPanel({ data }: { data: ChallengePageData }) {
     <details className="group">
       <summary className="mb-3 flex cursor-pointer list-none items-center gap-2 text-sm font-semibold">
         <Badge tone="rose">Elenenler</Badge>
-        <span className="text-muted-foreground">{dropped.length} · göster</span>
+        <span className="text-muted-foreground">
+          <FilteredCount types={dropped.map((card) => card.media.mediaType)} /> · göster
+        </span>
       </summary>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {dropped.map((card) => (

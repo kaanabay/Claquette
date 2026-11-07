@@ -105,4 +105,32 @@ describe("describeActivity", () => {
     );
     expect(describeActivity("progress.updated", { title: "Dune", status: null, rating: 7 })).toBe("“Dune” için 7/10 puan verdi");
   });
+
+  it("tells how items went out of the rounds and back", () => {
+    expect(describeActivity("entry.suggested", { title: "Dune", offRound: true, finished: "me" })).toBe(
+      "tur dışına “Dune” ekledi · kendisi bitirmişti",
+    );
+    expect(describeActivity("entry.off_round", { title: "Dune", from: "round", round: "Tur 3" })).toBe(
+      "“Dune” ögesini «Tur 3» turundan tur dışına aldı",
+    );
+    expect(describeActivity("entry.off_round", { title: "Dune", from: "pool" })).toBe("“Dune” ögesini havuzdan tur dışına aldı");
+    expect(describeActivity("entry.off_round", { title: "Dune", from: "suggestions" })).toBe("“Dune” önerisini tur dışına aldı");
+    expect(describeActivity("entry.off_round", { title: "Dune", from: "pool", automatic: true }, false)).toBe(
+      "“Dune” havuzdan tur dışına geçti",
+    );
+    expect(describeActivity("entry.back_from_off_round", { title: "Dune", to: "pool" })).toBe("“Dune” ögesini havuza geri aldı");
+    expect(describeActivity("entry.back_from_off_round", { title: "Dune", to: "round", round: "Tur 3" })).toBe(
+      "“Dune” ögesini «Tur 3» turuna geri aldı",
+    );
+    expect(describeActivity("entry.moved", { title: "Dune", round: "Kasım 2026", fromOffRound: true })).toBe(
+      "“Dune” ögesini tur dışından «Kasım 2026» turuna aldı",
+    );
+  });
+
+  it("says when nobody will finish an item, and who passed on one", () => {
+    expect(describeActivity("entry.state_changed", { title: "Dune", to: "Reddedildi", automatic: true, gaveUp: true }, false)).toBe(
+      "“Dune” kimse bitirmeyeceği için «Reddedildi» oldu",
+    );
+    expect(describeActivity("progress.updated", { title: "Dune", status: "skipped" })).toBe("“Dune” ögesini pas geçti");
+  });
 });

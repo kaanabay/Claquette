@@ -1,4 +1,5 @@
 import { Popcorn } from "lucide-react";
+import { FilterEmpty, FilteredCount } from "@/components/item-filter";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/misc";
 import { EntryCard } from "@/modules/entries/components/entry-card";
@@ -17,12 +18,16 @@ export function EntryBoard({ board }: { board: ChallengePageData["board"] }) {
   return (
     <div className="flex flex-col gap-8">
       {board.map(({ state, entries }) => {
+        const types = entries.map((card) => card.media.mediaType);
         const grid = (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {entries.map((card) => (
-              <EntryCard key={card.id} card={card} showState={false} />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {entries.map((card) => (
+                <EntryCard key={card.id} card={card} showState={false} />
+              ))}
+            </div>
+            <FilterEmpty types={types} />
+          </>
         );
         if (state.category === "dropped") {
           if (entries.length === 0) return null;
@@ -30,7 +35,9 @@ export function EntryBoard({ board }: { board: ChallengePageData["board"] }) {
             <details key={state.id} className="group">
               <summary className="mb-3 flex cursor-pointer list-none items-center gap-2 text-sm font-semibold">
                 <Badge tone={state.color}>{state.label}</Badge>
-                <span className="text-muted-foreground">{entries.length} · göster</span>
+                <span className="text-muted-foreground">
+                  <FilteredCount types={types} /> · göster
+                </span>
               </summary>
               {grid}
             </details>
@@ -40,7 +47,9 @@ export function EntryBoard({ board }: { board: ChallengePageData["board"] }) {
           <section key={state.id}>
             <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold">
               <Badge tone={state.color}>{state.label}</Badge>
-              <span className="text-muted-foreground">{entries.length}</span>
+              <span className="text-muted-foreground">
+                <FilteredCount types={types} />
+              </span>
             </h3>
             {entries.length > 0 ? grid : <p className="text-xs text-muted-foreground">Bu durumda öge yok.</p>}
           </section>

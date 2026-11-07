@@ -19,15 +19,17 @@ export function AddPanel({ data, link, closeHref }: { data: SuggestPageData; lin
   const title =
     context.kind === "plan"
       ? "Listeye ekle"
-      : round?.timing === "past"
-        ? "Geçmişi doldur"
-        : onBehalf
-          ? "Adına ekle"
-          : context.kind === "pool"
-            ? round
-              ? "Tura ekle"
-              : "Havuza aday ekle"
-            : "Öneri yap";
+      : context.offRound
+        ? "Tur dışına ekle"
+        : round?.timing === "past"
+          ? "Geçmişi doldur"
+          : onBehalf
+            ? "Adına ekle"
+            : context.kind === "pool"
+              ? round
+                ? "Tura ekle"
+                : "Havuza aday ekle"
+              : "Öneri yap";
   const where = [round ? `«${round.label}» turu` : null, onBehalf ? `${credited.name} adına` : null].filter(Boolean).join(" · ");
   const linkKey = [link.round, link.mode, link.media, link.as].join(":");
 
@@ -54,7 +56,7 @@ export function AddPanel({ data, link, closeHref }: { data: SuggestPageData; lin
             challengeId={data.challenge.id}
             mediaTypes={data.mediaTypes}
             targets={data.targets}
-            placement={options.placement}
+            placement={context.offRound ? "off" : options.placement}
             plan={data.plan}
             context={context}
             picks={data.picks}

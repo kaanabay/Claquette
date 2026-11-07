@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+import { FilteredCount, ItemFilterProvider, TypeFilterBar } from "@/components/item-filter";
 import { PageSkeleton } from "@/components/page-skeleton";
 import { FlashNotice } from "@/components/ui/flash-notice";
 import { SectionTitle } from "@/components/ui/misc";
@@ -11,6 +12,7 @@ import { listBoardNotes } from "@/modules/boards/queries";
 import { AddPanel } from "@/modules/challenges/components/add-panel";
 import { ChallengeHeader } from "@/modules/challenges/components/challenge-header";
 import { EntryBoard } from "@/modules/challenges/components/entry-board";
+import { OffRoundPanel } from "@/modules/challenges/components/off-round-panel";
 import { DroppedPanel, PlanPanel, SuggestionsPanel } from "@/modules/challenges/components/plan-panel";
 import { PoolPanel } from "@/modules/challenges/components/pool-panel";
 import { RoundPanel } from "@/modules/challenges/components/round-panel";
@@ -48,6 +50,11 @@ async function Challenge({ params, searchParams }: Pick<PageProps<"/challenges/[
   const notes = await listBoardNotes({ challengeId: data.challenge.id }, { id: user.id, canManage: data.access.canManage });
 
   const typeLabels = Object.fromEntries(types.map((type) => [type.slug, `${type.icon} ${type.label}`]));
+  // The type filter offers the types the list holds.
+  const typeCounts = data.mediaTypeCounts.map(({ slug, count }) => {
+    const type = types.find((candidate) => candidate.slug === slug);
+    return { slug, count, label: type?.label ?? slug, icon: type?.icon ?? "✨" };
+  });
   // Notices after a redirect: only ids of items that are really here count.
   const added = (single(query.added) ?? "").split(",").filter((id) => isUuid(id) && Object.hasOwn(data.titles, id));
   const removed = single(query.removed);
@@ -72,31 +79,39 @@ async function Challenge({ params, searchParams }: Pick<PageProps<"/challenges/[
       {removed && isUuid(removed) && !Object.hasOwn(data.titles, removed) ? (
         <FlashNotice id={`removed:${removed}`} message="Öge listeden silindi." params={["removed"]} />
       ) : null}
-      {data.plan ? (
-        <>
-          <PlanPanel data={data} />
-          <SuggestionsPanel data={data} />
-          <DroppedPanel data={data} />
-        </>
-      ) : (
-        <>
-          <RoundPanel data={data} />
-          <RoundsPanel data={data} kind="upcoming" />
-          <RoundsPanel data={data} kind="past" />
-          <PoolPanel data={data} />
-          <section>
-            <SectionTitle action={data.entryCount > 1 ? <SortSelect value={boardSort} options={BOARD_SORTS} /> : null}>
-              Ögeler <span className="font-normal text-muted-foreground">({data.entryCount})</span>
-            </SectionTitle>
-            <EntryBoard
-              board={data.board.map((column) => ({
-                ...column,
-                entries: sortRows(column.entries, boardSort, (card) => ({ addedAt: card.createdAt, media: card.media })),
-              }))}
-            />
-          </section>
-        </>
-      )}
+      <ItemFilterProvider>
+        <TypeFilterBar types={typeCounts} />
+        {data.plan ? (
+          <>
+            <PlanPanel data={data} />
+            <SuggestionsPanel data={data} />
+            <OffRoundPanel data={data} />
+            <DroppedPanel data={data} />
+          </>
+        ) : (
+          <>
+            <RoundPanel data={data} />
+            <RoundsPanel data={data} kind="upcoming" />
+            <RoundsPanel data={data} kind="past" />
+            <PoolPanel data={data} />
+            <OffRoundPanel data={data} />
+            <section>
+              <SectionTitle action={data.entryCount > 1 ? <SortSelect value={boardSort} options={BOARD_SORTS} /> : null}>
+                Ögeler{" "}
+                <span className="font-normal text-muted-foreground">
+                  (<FilteredCount types={data.mediaTypeCounts.flatMap(({ slug, count }) => Array<string>(count).fill(slug))} />)
+                </span>
+              </SectionTitle>
+              <EntryBoard
+                board={data.board.map((column) => ({
+                  ...column,
+                  entries: sortRows(column.entries, boardSort, (card) => ({ addedAt: card.createdAt, media: card.media })),
+                }))}
+              />
+            </section>
+          </>
+        )}
+      </ItemFilterProvider>
       <Board
         notes={notes}
         board={{ challengeId: data.challenge.id }}

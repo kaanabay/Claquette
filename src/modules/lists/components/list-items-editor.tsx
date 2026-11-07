@@ -14,6 +14,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { CalendarDays, ExternalLink, GripVertical, MoreHorizontal, NotebookPen, Send, Trash } from "lucide-react";
 import Link from "next/link";
 import { useActionState, useId, useState, useTransition } from "react";
+import { isFiltering, matchesFilter, useItemFilter } from "@/components/item-filter";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/fields";
 import { FormMessage } from "@/components/ui/form-message";
@@ -42,6 +43,7 @@ type ShareTarget = ListPageData["shareTargets"][number];
 /**
  * The owner's view of a list: drag the handle (or focus it and use the arrow keys) to reorder,
  * add a note, remove an item, or suggest it to a shared list. The new order is saved at once.
+ * Filtered by type, the items keep their numbers and dragging pauses (the order covers them all).
  */
 export function ListItemsEditor({
   listId,
@@ -58,6 +60,8 @@ export function ListItemsEditor({
   shareTargets: ShareTarget[];
 }) {
   const manual = sort === "manual";
+  const filter = useItemFilter();
+  const filtering = isFiltering(filter);
   const dndId = useId();
   const serverOrder = items.map((item) => item.id);
   const [order, setOrder] = useState(serverOrder);
@@ -98,13 +102,20 @@ export function ListItemsEditor({
           {error}
         </p>
       ) : null}
+      {filtering && manual ? <p className="text-xs text-muted-foreground">Filtre açıkken sürükleyerek sıralanmaz; tümünü göstererek sırala.</p> : null}
       <DndContext id={dndId} sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <SortableContext items={order} strategy={verticalListSortingStrategy}>
           <ol className="flex flex-col gap-2">
             {order.map((id, index) => {
               const item = byId.get(id);
-              return item ? (
-                <SortableRow key={id} item={item} rank={isRanked && manual ? index + 1 : null} draggable={manual} shareTargets={shareTargets} />
+              return item && matchesFilter(filter, { type: item.media.mediaType }) ? (
+                <SortableRow
+                  key={id}
+                  item={item}
+                  rank={isRanked && manual ? index + 1 : null}
+                  draggable={manual && !filtering}
+                  shareTargets={shareTargets}
+                />
               ) : null;
             })}
           </ol>

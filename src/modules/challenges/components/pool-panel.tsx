@@ -1,11 +1,14 @@
 import { Dices, Inbox, Plus, ThumbsUp, Ticket } from "lucide-react";
 import Link from "next/link";
+import { FilterEmpty, FilteredCount } from "@/components/item-filter";
 import { ActionForm } from "@/components/ui/action-form";
 import { buttonVariants } from "@/components/ui/button";
 import { EmptyState, SectionTitle } from "@/components/ui/misc";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { toggleVoteAction } from "@/modules/entries/actions";
 import { EntryCard } from "@/modules/entries/components/entry-card";
+import { TakeOffRoundButton } from "@/modules/entries/components/off-round-buttons";
+import { formatTitle } from "@/modules/media/titles";
 import { drawFromPoolAction, selectPoolEntryAction } from "../actions";
 import type { ChallengePageData } from "../queries";
 
@@ -37,12 +40,15 @@ export function PoolPanel({ data }: { data: ChallengePageData }) {
           ) : null
         }
       >
-        Ortak havuz <span className="font-normal text-muted-foreground">({pool.candidates.length})</span>
+        Ortak havuz{" "}
+        <span className="font-normal text-muted-foreground">
+          (<FilteredCount types={pool.candidates.map((card) => card.media.mediaType)} />)
+        </span>
       </SectionTitle>
       <p className="mb-4 text-sm text-muted-foreground">
         Her tur {rules.picksPerRound} öge {METHOD_TEXT[rules.selection]}.
         {rules.autoDraw ? " Yeni tur başladığında seçim otomatik yapılır." : ""}
-        {round ? ` Bu turda ${pool.openSlots} boş yer var.` : ""}
+        {round ? ` Bu turda ${pool.openSlots} boş yer var.` : ""} Birinizin tek başına bitirdiği aday havuzdan çıkar, tur dışına geçer.
       </p>
 
       {pool.candidates.length === 0 ? (
@@ -81,6 +87,7 @@ export function PoolPanel({ data }: { data: ChallengePageData }) {
                         </SubmitButton>
                       </ActionForm>
                     ) : null}
+                    <TakeOffRoundButton entryId={card.id} title={formatTitle(card.media)} variant="ghost" />
                   </div>
                 ) : null
               }
@@ -88,6 +95,7 @@ export function PoolPanel({ data }: { data: ChallengePageData }) {
           ))}
         </div>
       )}
+      <FilterEmpty types={pool.candidates.map((card) => card.media.mediaType)} />
     </section>
   );
 }

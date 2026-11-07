@@ -15,11 +15,14 @@ import {
   deleteEntry,
   deleteNote,
   placeEntry,
+  returnFromOffRound,
   setFinishedOn,
   suggestEntries,
+  takeOffRound,
   toggleVote,
   unplanEntry,
   updateProgress,
+  type Placement,
 } from "./service";
 import { FINISHED_CHOICES } from "./tracking";
 
@@ -41,6 +44,8 @@ const suggestSchema = z.object({
   targetRound: z.coerce.number().int().min(0).optional(),
   // Group admins: whose item it is.
   onBehalfOf: z.string().max(100).optional().transform(emptyToNull),
+  // "Tur dışı": into no round, on any kind of list.
+  offRound: z.literal("1").optional(),
 });
 
 export async function suggestEntryAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -63,6 +68,7 @@ export async function suggestEntryAction(_prev: ActionState, formData: FormData)
       roundIndex: data.targetRound ?? null,
       as: data.onBehalfOf,
       finished: data.finished,
+      offRound: data.offRound === "1",
     });
   } catch (error) {
     return toActionState(error);
@@ -134,21 +140,54 @@ export async function setFinishedOnAction(_prev: ActionState, formData: FormData
   );
 }
 
-/** One-tap "İzledim/Okudum" on a card; the previous status lets the notice offer "Geri al". */
+/**
+ * One-tap "İzledim/Okudum" (or "İzlemeyeceğim"); the previous status lets the notice offer "Geri al".
+ * `backToPool` is that "Geri al" when the change had taken a pool candidate out of the pool.
+ */
 export async function markProgressAction(
   entryId: string,
   status: ProgressStatus,
-): Promise<{ error: string } | { previous: ProgressStatus | null }> {
+  options: { backToPool?: boolean } = {},
+): Promise<{ error: string } | { previous: ProgressStatus | null; leftPool: boolean }> {
   const user = await requireUser();
   if (!z.uuid().safeParse(entryId).success || !z.enum(PROGRESS_STATUSES).safeParse(status).success) {
     return { error: "Öge bulunamadı." };
   }
   try {
-    const previous = await updateProgress(user.id, entryId, { status });
+    const result = await updateProgress(user.id, entryId, { status }, { backToPool: options.backToPool === true });
+    refresh();
+    return result;
+  } catch (error) {
+    return { error: toActionState(error)?.error ?? "Durum kaydedilemedi." };
+  }
+}
+
+const placementSchema = z.object({ roundId: z.uuid().nullable(), stateId: z.uuid() });
+
+/** "Tur dışına al"; where the item was comes back for the notice's "Geri al". */
+export async function takeOffRoundAction(entryId: string): Promise<{ error: string } | { previous: Placement }> {
+  const user = await requireUser();
+  if (!z.uuid().safeParse(entryId).success) return { error: "Öge bulunamadı." };
+  try {
+    const previous = await takeOffRound(user.id, entryId);
     refresh();
     return { previous };
   } catch (error) {
-    return { error: toActionState(error)?.error ?? "Durum kaydedilemedi." };
+    return { error: toActionState(error)?.error ?? "Öge tur dışına alınamadı." };
+  }
+}
+
+/** Back from "Tur dışı": to where it was (`to`, the notice's "Geri al"), or else to the pool / the suggestions. */
+export async function returnFromOffRoundAction(entryId: string, to?: Placement): Promise<{ error: string } | { ok: true }> {
+  const user = await requireUser();
+  const place = to === undefined ? { success: true as const, data: undefined } : placementSchema.safeParse(to);
+  if (!z.uuid().safeParse(entryId).success || !place.success) return { error: "Öge bulunamadı." };
+  try {
+    await returnFromOffRound(user.id, entryId, place.data);
+    refresh();
+    return { ok: true };
+  } catch (error) {
+    return { error: toActionState(error)?.error ?? "Öge geri alınamadı." };
   }
 }
 

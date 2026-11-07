@@ -12,12 +12,14 @@ import { todayIn } from "@/modules/challenges/domain/cadence";
 import { DeleteEntryButton } from "@/modules/entries/components/delete-entry-button";
 import {
   NotesSection,
+  OffRoundActions,
   PeopleProgress,
   PlanActions,
   ProgressPanel,
   StateActions,
   VotePanel,
 } from "@/modules/entries/components/entry-panels";
+import { OFF_ROUND } from "@/modules/entries/placement";
 import { getEntryPage } from "@/modules/entries/queries";
 import { listPeople } from "@/modules/entries/tracking";
 import { MediaCover } from "@/modules/media/components/media-cover";
@@ -47,14 +49,17 @@ async function Entry({ params }: Pick<PageProps<"/entries/[entryId]">, "params">
   const data = await getEntryPage(user.id, entryId);
   if (!data) notFound();
 
-  const { entry, access, current, transitions, plan, people, tracking, mine, notes, votes, votedByMe, activity, canDelete } = data;
+  const { entry, access, current, transitions, plan, offRound, people, tracking, mine, notes, votes, votedByMe, activity, canDelete } = data;
+  const isOffRound = offRound.place === "off";
   const where = entry.roundLabel
     ? ` · ${entry.roundLabel}`
-    : plan?.isSuggestion
-      ? " · Önerilerde"
-      : entry.isPoolCandidate
-        ? " · Havuzda"
-        : "";
+    : isOffRound
+      ? ` · ${OFF_ROUND}`
+      : plan?.isSuggestion
+        ? " · Önerilerde"
+        : entry.isPoolCandidate
+          ? " · Havuzda"
+          : "";
   const media = entry.media;
   const facts = [
     media.metadata.runtimeMinutes ? `${media.metadata.runtimeMinutes} dk` : null,
@@ -118,13 +123,13 @@ async function Entry({ params }: Pick<PageProps<"/entries/[entryId]">, "params">
         <div className="flex min-w-0 flex-col gap-6">
           <Card>
             <CardHeader>
-              <CardTitle>{plan && !plan.isSuggestion ? "Plan" : "Öneri"}</CardTitle>
+              <CardTitle>{isOffRound ? OFF_ROUND : plan && !plan.isSuggestion ? "Plan" : "Öneri"}</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
               <p className="flex flex-wrap items-center gap-1.5 text-sm">
                 <span className="font-medium">{entry.suggestedBy?.name ?? "Silinmiş kullanıcı"}</span>
-                {plan ? (
-                  <span>{plan.isSuggestion ? "önerdi" : "ekledi"}</span>
+                {plan || isOffRound ? (
+                  <span>{plan?.isSuggestion ? "önerdi" : "ekledi"}</span>
                 ) : (
                   <>
                     <ArrowRight className="size-3.5 text-muted-foreground" />
@@ -140,6 +145,7 @@ async function Entry({ params }: Pick<PageProps<"/entries/[entryId]">, "params">
                 <blockquote className="border-l-2 border-primary pl-3 text-sm italic text-muted-foreground">“{entry.pitch}”</blockquote>
               ) : null}
               {plan ? <PlanActions entryId={entry.id} roundIndex={entry.roundIndex} plan={plan} dropped={current.category === "dropped"} /> : null}
+              <OffRoundActions entryId={entry.id} title={formatTitle(media)} offRound={offRound} />
               <StateActions
                 entryId={entry.id}
                 current={current}
@@ -170,7 +176,7 @@ async function Entry({ params }: Pick<PageProps<"/entries/[entryId]">, "params">
               <CardTitle>Senin durumun</CardTitle>
             </CardHeader>
             <CardContent>
-              <ProgressPanel entryId={entry.id} mediaType={media.mediaType} mine={mine} />
+              <ProgressPanel entryId={entry.id} title={formatTitle(media)} mediaType={media.mediaType} mine={mine} />
             </CardContent>
           </Card>
           {entry.isPoolCandidate && access.isParticipant ? (

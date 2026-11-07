@@ -7,6 +7,7 @@ const STATUS_PHRASES: Record<ProgressStatus, string> = {
   in_progress: "ögesine başladı",
   completed: "ögesini bitirdi",
   dropped: "ögesini yarım bıraktı",
+  skipped: "ögesini pas geçti",
 };
 
 // Items put into a round that was already over carry who had finished them.
@@ -51,6 +52,7 @@ export function describeActivity(type: string, data: Record<string, unknown>, ha
     case "entry.suggested": {
       const round = typeof data.round === "string" ? ` («${data.round}» turu için)` : "";
       if (data.pool) return `havuza ${title} ekledi${asSuffix(data.as)}`;
+      if (data.offRound) return `tur dışına ${title} ekledi${asSuffix(data.as)}${finishedSuffix(data.finished)}`;
       return (
         (typeof data.recipientName === "string" ? `${data.recipientName} için ${title} önerdi` : `gruba ${title} önerdi`) +
         round +
@@ -59,6 +61,7 @@ export function describeActivity(type: string, data: Record<string, unknown>, ha
     }
     case "entry.state_changed":
       if (data.reopened) return `${title} yeniden «${String(data.to)}» oldu`;
+      if (data.gaveUp) return `${title} kimse bitirmeyeceği için «${String(data.to)}» oldu`;
       return data.automatic
         ? `${title} herkes bitirdiği için «${String(data.to)}» oldu`
         : `${title} ögesini «${String(data.to)}» olarak işaretledi`;
@@ -80,7 +83,20 @@ export function describeActivity(type: string, data: Record<string, unknown>, ha
       return `«${String(data.round)}» turuna ${title} ekledi (${String(data.picker)} → ${recipient ?? "grup"})${finished}`;
     }
     case "entry.moved":
+      if (data.fromOffRound) return `${title} ögesini tur dışından «${String(data.round)}» turuna aldı${finishedSuffix(data.finished)}`;
       return `${title} ögesini «${String(data.round)}» turuna taşıdı${finishedSuffix(data.finished)}`;
+    case "entry.off_round":
+      // Automatic: someone finished a pool candidate alone.
+      if (data.automatic) return hasActor ? `${title} ögesini havuzdan tur dışına aldı` : `${title} havuzdan tur dışına geçti`;
+      if (data.from === "round") {
+        return typeof data.round === "string" ? `${title} ögesini «${data.round}» turundan tur dışına aldı` : `${title} ögesini tur dışına aldı`;
+      }
+      return data.from === "pool" ? `${title} ögesini havuzdan tur dışına aldı` : `${title} önerisini tur dışına aldı`;
+    case "entry.back_from_off_round":
+      if (data.to === "round") {
+        return typeof data.round === "string" ? `${title} ögesini «${data.round}» turuna geri aldı` : `${title} ögesini turuna geri aldı`;
+      }
+      return data.to === "pool" ? `${title} ögesini havuza geri aldı` : `${title} ögesini önerilere geri aldı`;
     case "entry.unplanned":
       return `${title} ögesini plandan çıkarıp önerilere aldı`;
     case "entry.deleted":
