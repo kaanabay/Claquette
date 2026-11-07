@@ -20,6 +20,7 @@ import {
   VotePanel,
 } from "@/modules/entries/components/entry-panels";
 import { OFF_ROUND } from "@/modules/entries/placement";
+import { PersonLink } from "@/modules/people/components/person-link";
 import { getEntryPage } from "@/modules/entries/queries";
 import { listPeople } from "@/modules/entries/tracking";
 import { MediaCover } from "@/modules/media/components/media-cover";
@@ -127,13 +128,21 @@ async function Entry({ params }: Pick<PageProps<"/entries/[entryId]">, "params">
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
               <p className="flex flex-wrap items-center gap-1.5 text-sm">
-                <span className="font-medium">{entry.suggestedBy?.name ?? "Silinmiş kullanıcı"}</span>
+                {entry.suggestedBy ? (
+                  <PersonLink id={entry.suggestedBy.id} name={entry.suggestedBy.name} className="font-medium" />
+                ) : (
+                  <span className="font-medium">Silinmiş kullanıcı</span>
+                )}
                 {plan || isOffRound ? (
                   <span>{plan?.isSuggestion ? "önerdi" : "ekledi"}</span>
                 ) : (
                   <>
                     <ArrowRight className="size-3.5 text-muted-foreground" />
-                    <span className="font-medium">{entry.suggestedFor?.name ?? "Tüm grup"}</span>
+                    {entry.suggestedFor ? (
+                      <PersonLink id={entry.suggestedFor.id} name={entry.suggestedFor.name} className="font-medium" />
+                    ) : (
+                      <span className="font-medium">Tüm grup</span>
+                    )}
                   </>
                 )}
                 <span className="text-muted-foreground">

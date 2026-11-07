@@ -79,6 +79,9 @@ Rules that keep this codebase working:
   line (a `truncate`d title, a pasted link). Long words break by default (`overflow-wrap` on `body`), except in a box
   sized by its content (`items-start`, `w-fit`): give free text there `wrap-anywhere`. Dropdown panels
   (`absolute right-0`) open leftwards from their trigger, so such triggers sit at the end of their row.
+- Profiles (`/people/<userId>`, `src/modules/people`) open to whoever shares a group with the person (`canViewProfile`)
+  and show only what happened in the viewer's own groups (the site admin: every group); anyone else gets a 404, as if
+  the person didn't exist. Link people with `PersonLink` / `profileHref`.
 - Board notes (`board_notes`) are free text for people; the engine never reads them. Edits carry the version
   they started from and are refused if the note changed meanwhile.
 - After signing in, navigate with a full load (`window.location`): links prefetched while signed out

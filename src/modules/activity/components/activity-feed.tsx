@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Avatar } from "@/components/ui/avatar";
 import { EmptyState } from "@/components/ui/misc";
 import { timeAgo } from "@/lib/dates";
+import { PersonLink } from "@/modules/people/components/person-link";
 import { describeActivity } from "../describe";
 import type { ActivityItem } from "../service";
 
@@ -30,7 +31,11 @@ export function ActivityFeed({ items, context = "group" }: { items: ActivityItem
             )}
             <div className="min-w-0 text-sm leading-snug">
               <p>
-                {item.actorName ? <span className="font-medium">{item.actorName} </span> : null}
+                {item.actorName && item.actorId ? (
+                  <>
+                    <PersonLink id={item.actorId} name={item.actorName} className="font-medium" />{" "}
+                  </>
+                ) : null}
                 {item.actorName ? text : text.charAt(0).toLocaleUpperCase("tr-TR") + text.slice(1)}
               </p>
               <p className="mt-0.5 flex flex-wrap gap-x-1 text-xs text-muted-foreground">

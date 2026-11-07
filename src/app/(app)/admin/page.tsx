@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { BackLink, PageSkeleton } from "@/components/page-skeleton";
 import { Avatar } from "@/components/ui/avatar";
+import { PersonLink } from "@/modules/people/components/person-link";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatShortDate } from "@/lib/short-date";
@@ -74,7 +75,7 @@ async function Admin() {
                   <Avatar name={user.name} seed={user.id} />
                   <span className="min-w-0">
                     <span className="block truncate font-medium">
-                      {user.name}
+                      <PersonLink id={user.id} name={user.name} />
                       {user.isViewer ? <span className="font-normal text-muted-foreground"> (sen)</span> : null}
                     </span>
                     <span className="block truncate text-xs text-muted-foreground">

@@ -17,6 +17,7 @@ import {
 import Link from "next/link";
 import { ActionForm } from "@/components/ui/action-form";
 import { AvatarStack } from "@/components/ui/avatar";
+import { profileHref } from "@/modules/people/components/person-link";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { SubmitButton } from "@/components/ui/submit-button";
@@ -150,7 +151,7 @@ export function ChallengeHeader({
       </div>
 
       <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-        <AvatarStack people={active.map((participant) => ({ id: participant.userId, name: participant.name }))} />
+        <AvatarStack people={active.map((participant) => ({ id: participant.userId, name: participant.name }))} hrefFor={profileHref} />
         <span>
           {strategy.key === "rotation" && active.length > 1
             ? `Sıra: ${active.map((participant) => participant.name).join(" → ")}`

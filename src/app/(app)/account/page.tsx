@@ -1,5 +1,6 @@
-import { Download } from "lucide-react";
+import { Download, UserRound } from "lucide-react";
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Suspense } from "react";
 import { BackLink, PageSkeleton } from "@/components/page-skeleton";
 import { buttonVariants } from "@/components/ui/button";
@@ -9,6 +10,7 @@ import { ChangePasswordForm } from "@/modules/auth/components/change-password-fo
 import { getProfile } from "@/modules/auth/queries";
 import { requireUser } from "@/modules/auth/session";
 import { todayIn } from "@/modules/challenges/domain/cadence";
+import { profileHref } from "@/modules/people/components/person-link";
 
 export const metadata: Metadata = { title: "Hesabım" };
 
@@ -38,6 +40,11 @@ async function Account() {
               .join(" · ")}
           </CardDescription>
         </CardHeader>
+        <CardContent>
+          <Link href={profileHref(user.id)} className={buttonVariants({ variant: "outline", size: "sm" })}>
+            <UserRound /> Profilim
+          </Link>
+        </CardContent>
       </Card>
 
       <Card>

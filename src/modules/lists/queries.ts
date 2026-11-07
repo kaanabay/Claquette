@@ -55,7 +55,8 @@ async function loadListStats(listIds: string[]) {
   return { labels, totals, covers };
 }
 
-export async function listMyLists(userId: string) {
+/** A person's personal lists, newest change first; `publicOnly` for someone else looking (a profile). */
+export async function listMyLists(userId: string, options: { publicOnly?: boolean } = {}) {
   const rows = await db
     .select({
       id: lists.id,
@@ -66,7 +67,7 @@ export async function listMyLists(userId: string) {
       updatedAt: lists.updatedAt,
     })
     .from(lists)
-    .where(eq(lists.ownerId, userId))
+    .where(and(eq(lists.ownerId, userId), options.publicOnly ? eq(lists.visibility, "public") : undefined))
     .orderBy(desc(lists.updatedAt));
   const stats = await loadListStats(rows.map((row) => row.id));
   return rows.map((row) => ({

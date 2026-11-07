@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { BackLink, PageSkeleton } from "@/components/page-skeleton";
 import { Avatar, AvatarStack } from "@/components/ui/avatar";
+import { PersonLink, profileHref } from "@/modules/people/components/person-link";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -55,7 +56,7 @@ async function Group({ params }: Pick<PageProps<"/groups/[groupId]">, "params">)
             <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{group.name}</h1>
             {group.description ? <p className="mt-1 text-muted-foreground">{group.description}</p> : null}
             <div className="mt-3 flex items-center gap-3 text-sm text-muted-foreground">
-              <AvatarStack people={members.map((member) => ({ id: member.userId, name: member.name }))} />
+              <AvatarStack people={members.map((member) => ({ id: member.userId, name: member.name }))} hrefFor={profileHref} />
               {members.length} üye
             </div>
           </div>
@@ -134,7 +135,7 @@ async function Group({ params }: Pick<PageProps<"/groups/[groupId]">, "params">)
                   <li key={member.userId} className="flex items-center gap-3 text-sm">
                     <Avatar name={member.name} seed={member.userId} />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate font-medium">{member.name}</span>
+                      <PersonLink id={member.userId} name={member.name} className="block truncate font-medium" />
                       {member.username ? <span className="block text-xs text-muted-foreground">@{member.username}</span> : null}
                     </span>
                     {member.role === "owner" ? (

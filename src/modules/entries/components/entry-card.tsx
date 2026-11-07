@@ -6,6 +6,7 @@ import { formatShortDate } from "@/lib/short-date";
 import { cn } from "@/lib/utils";
 import { MediaCover } from "@/modules/media/components/media-cover";
 import { MediaTitle } from "@/modules/media/components/media-title";
+import { PersonLink } from "@/modules/people/components/person-link";
 import { formatTitle } from "@/modules/media/titles";
 import { formatRating, progressLabel } from "../labels";
 import { entryFilterKey } from "../filter-key";
@@ -65,11 +66,12 @@ export function EntryCard({
             {card.suggestedBy ? (
               by === "recipient" ? (
                 <span className="flex items-center gap-1">
-                  {card.suggestedBy.name} <ArrowRight className="size-3" /> {card.suggestedFor?.name ?? "Grup"}
+                  <PersonLink id={card.suggestedBy.id} name={card.suggestedBy.name} /> <ArrowRight className="size-3" />{" "}
+                  {card.suggestedFor ? <PersonLink id={card.suggestedFor.id} name={card.suggestedFor.name} /> : "Grup"}
                 </span>
               ) : (
                 <span>
-                  {card.suggestedBy.name} {by === "added" ? "ekledi" : "önerdi"}
+                  <PersonLink id={card.suggestedBy.id} name={card.suggestedBy.name} /> {by === "added" ? "ekledi" : "önerdi"}
                 </span>
               )
             ) : null}

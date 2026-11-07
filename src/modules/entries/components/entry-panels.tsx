@@ -7,6 +7,7 @@ import { timeAgo } from "@/lib/dates";
 import { formatShortDate } from "@/lib/short-date";
 import { dotClass } from "@/lib/tones";
 import { PlaceForm } from "@/modules/challenges/components/place-form";
+import { PersonLink } from "@/modules/people/components/person-link";
 import {
   changeEntryStateAction,
   deleteNoteAction,
@@ -230,7 +231,7 @@ export function PeopleProgress({ people, mediaType }: { people: EntryPageData["p
         <li key={person.userId} className="flex items-center justify-between gap-3 text-sm">
           <span className="flex min-w-0 items-center gap-2">
             <Avatar name={person.name} seed={person.userId} className="size-6 text-[10px]" />
-            <span className="truncate">{person.name}</span>
+            <PersonLink id={person.userId} name={person.name} className="truncate" />
           </span>
           <span className="shrink-0 text-xs text-muted-foreground">
             {person.progress ? progressLabel(person.progress.status, mediaType) : "Başlamadı"}

@@ -41,7 +41,7 @@ export function matchesFilter(filter: ItemFilter | null, key: FilterKey): boolea
   return filter.words.length === 0 || (key.text !== undefined && matchesWords(key.text, filter.words));
 }
 
-export type TypeCount = { slug: string; label: string; icon: string; count: number };
+export type TypeCount = { slug: string; label: string; icon?: string; count: number };
 
 const chip = (selected: boolean) =>
   cn(
@@ -109,7 +109,7 @@ export function ItemFilterBar({
                 className={chip(filter.type === type.slug)}
                 onClick={() => setType(filter.type === type.slug ? null : type.slug)}
               >
-                <span aria-hidden>{type.icon}</span>
+                {type.icon ? <span aria-hidden>{type.icon}</span> : null}
                 {type.label} <span className="text-muted-foreground">{type.count}</span>
               </button>
             ))}
@@ -144,11 +144,13 @@ export function FilteredCount({ items }: { items: readonly FilterKey[] }) {
 }
 
 /** Says so when the filter leaves none of these items (a section's own empty state covers no items at all). */
-export function FilterEmpty({ items, className }: { items: readonly FilterKey[]; className?: string }) {
+export function FilterEmpty({ items, message, className }: { items: readonly FilterKey[]; message?: string; className?: string }) {
   const filter = useItemFilter();
   if (!isFiltering(filter) || items.length === 0 || items.some((key) => matchesFilter(filter, key))) return null;
   return (
-    <p className={cn("text-xs text-muted-foreground", className)}>{isSearching(filter) ? "Aramaya uyan öge yok." : "Bu türde öge yok."}</p>
+    <p className={cn("text-xs text-muted-foreground", className)}>
+      {message ?? (isSearching(filter) ? "Aramaya uyan öge yok." : "Bu türde öge yok.")}
+    </p>
   );
 }
 
