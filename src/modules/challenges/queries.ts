@@ -20,6 +20,7 @@ import { todayIn } from "./domain/cadence";
 import { canAddAs } from "./domain/additions";
 import { canAcceptSuggestion, describeSlotOption } from "./domain/plan";
 import type { SuggestionOptions } from "./domain/strategies";
+import { entryFilterKey } from "@/modules/entries/filter-key";
 import { buildSlots, loadPlanRounds, loadSlotOptions, toSlotOptions, type SlotOption } from "./planning";
 import { syncRounds } from "./rounds";
 import { activeParticipantIds, currentSettings } from "./settings";
@@ -161,8 +162,9 @@ export async function getChallengePage(userId: string, challengeId: string) {
       done: cards.filter((card) => card.offRound && card.state.category === "done"),
       canAdd: (access.isParticipant || access.isAdmin) && challenge.status === "active",
     },
-    // Media types among the items (for the type filter), most common first.
+    // Media types among the items (for the type filter), most common first, and how the search finds each item.
     mediaTypeCounts: countTypes(cards),
+    filterKeys: cards.map((card) => entryFilterKey(card)),
     plan,
     timeline,
     board: states.map((state) => ({

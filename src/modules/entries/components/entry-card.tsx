@@ -8,6 +8,7 @@ import { MediaCover } from "@/modules/media/components/media-cover";
 import { MediaTitle } from "@/modules/media/components/media-title";
 import { formatTitle } from "@/modules/media/titles";
 import { formatRating, progressLabel } from "../labels";
+import { entryFilterKey } from "../filter-key";
 import { OFF_ROUND } from "../placement";
 import type { EntryCard as EntryCardData } from "../queries";
 import { listPeople, type TrackingPerson } from "../tracking";
@@ -42,8 +43,8 @@ export function EntryCard({
   const by = card.offRound && byline === "recipient" ? "added" : byline;
   const meta = [card.media.year, card.media.creators.slice(0, 2).join(", ")].filter(Boolean).join(" · ");
   return (
-    // A page with a type filter shows the card only while it matches.
-    <FilterItem type={card.media.mediaType}>
+    // A page with a search or a type filter shows the card only while it matches.
+    <FilterItem filterKey={entryFilterKey(card, showChallenge)}>
       <article data-highlight-id={card.id} className={cn("flex gap-3 rounded-xl border bg-card p-3 shadow-xs", className)}>
         <Link href={href} className="shrink-0" tabIndex={-1} aria-hidden>
           <MediaCover src={card.media.imageUrl} title={formatTitle(card.media)} icon={card.media.icon} className="w-16" />

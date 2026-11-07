@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { ItemFilterProvider, TypeFilterBar, type TypeCount } from "@/components/item-filter";
+import { ItemFilterBar, ItemFilterProvider, type TypeCount } from "@/components/item-filter";
 import { BackLink, PageSkeleton } from "@/components/page-skeleton";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -20,6 +20,7 @@ import { SharePanel } from "@/modules/lists/components/share-panel";
 import { ExportMenu } from "@/modules/exports/components/export-menu";
 import { getListPage, getListTitle, getPublicListPreview } from "@/modules/lists/queries";
 import { SortSelect } from "@/modules/media/components/sort-select";
+import { mediaFilterKey } from "@/modules/media/filter-key";
 import { listMediaTypes } from "@/modules/media/service";
 import { isSortKey, SORTS } from "@/modules/media/sort";
 
@@ -53,6 +54,7 @@ async function ListContent({ params, searchParams }: Pick<PageProps<"/lists/[lis
   if (!data) notFound();
   const { list, items, isOwner, sort } = data;
   const typeCounts = countTypes(items);
+  const filterKeys = items.map((item) => mediaFilterKey(item.media));
 
   if (!isOwner) {
     return (
@@ -70,11 +72,9 @@ async function ListContent({ params, searchParams }: Pick<PageProps<"/lists/[lis
         </header>
         <ItemFilterProvider>
           {items.length > 1 ? (
-            <div className="flex flex-wrap items-center gap-3">
-              <TypeFilterBar types={typeCounts} />
-              <div className="ml-auto">
-                <SortSelect value={sort} options={SORTS} />
-              </div>
+            <div className="flex flex-wrap items-start gap-3">
+              <ItemFilterBar items={filterKeys} types={typeCounts} className="min-w-0 flex-1" />
+              <SortSelect value={sort} options={SORTS} />
             </div>
           ) : null}
           <ListView items={items} isRanked={list.isRanked} manual={sort === "manual"} />
@@ -154,7 +154,7 @@ async function ListContent({ params, searchParams }: Pick<PageProps<"/lists/[lis
               </SectionTitle>
               {items.length > 0 ? (
                 <>
-                  <TypeFilterBar types={typeCounts} className="mb-3" />
+                  <ItemFilterBar items={filterKeys} types={typeCounts} className="mb-3" />
                   <p className="mb-3 text-xs text-muted-foreground">
                     {sort === "manual"
                       ? "Sırayı değiştirmek için soldaki tutamacı sürükle. Tarihe göre sıralamak için yukarıdan seç; seçimin listeyi açan herkes için geçerli olur."

@@ -3,13 +3,14 @@ import { FilterItem } from "@/components/item-filter";
 import { EmptyState } from "@/components/ui/misc";
 import { formatShortDate } from "@/lib/short-date";
 import { MediaCover } from "@/modules/media/components/media-cover";
+import { mediaFilterKey } from "@/modules/media/filter-key";
 import { MediaTitle } from "@/modules/media/components/media-title";
 import { formatTitle, nativeTitle } from "@/modules/media/titles";
 import type { ListPageData } from "../queries";
 
 /**
  * Read-only list for visitors (a friend opening a shared link). Rank numbers only in the list's own
- * order; filtered by type, the items keep their numbers.
+ * order; searched or filtered by type, the items keep their numbers.
  */
 export function ListView({ items, isRanked, manual }: { items: ListPageData["items"]; isRanked: boolean; manual: boolean }) {
   if (items.length === 0) {
@@ -20,7 +21,7 @@ export function ListView({ items, isRanked, manual }: { items: ListPageData["ite
       {items.map((item, index) => {
         const meta = [item.media.year, item.media.creators.slice(0, 3).join(", ")].filter(Boolean).join(" · ");
         return (
-          <FilterItem key={item.id} type={item.media.mediaType}>
+          <FilterItem key={item.id} filterKey={mediaFilterKey(item.media)}>
             <li className="flex items-start gap-3 rounded-xl border bg-card p-3 shadow-xs sm:gap-4">
               {isRanked && manual ? (
                 <span className="w-8 shrink-0 pt-1 text-right text-2xl font-semibold tabular-nums text-primary">{index + 1}</span>

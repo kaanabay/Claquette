@@ -1,6 +1,6 @@
 import { CalendarPlus, Lightbulb, Plus, Undo2, X } from "lucide-react";
 import Link from "next/link";
-import { FilterEmpty, FilteredCount, FilterGroup } from "@/components/item-filter";
+import { FilterDetails, FilterEmpty, FilteredCount, FilterGroup } from "@/components/item-filter";
 import { ActionForm } from "@/components/ui/action-form";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { SubmitButton } from "@/components/ui/submit-button";
 import { cn } from "@/lib/utils";
 import { changeEntryStateAction } from "@/modules/entries/actions";
 import { EntryCard } from "@/modules/entries/components/entry-card";
+import { entryFilterKey } from "@/modules/entries/filter-key";
 import { TakeOffRoundButton } from "@/modules/entries/components/off-round-buttons";
 import { formatTitle } from "@/modules/media/titles";
 import { describeRoundSummary, summarizeRound } from "@/modules/entries/tracking";
@@ -35,7 +36,11 @@ export function PlanPanel({ data }: { data: ChallengePageData }) {
     <section>
       <SectionTitle>Plan</SectionTitle>
       {past.length > 0 ? (
-        <details open={ahead.length === 0 || past.length <= 3} className="group mb-4">
+        <FilterDetails
+          items={past.flatMap((slot) => slot.entries.map((card) => entryFilterKey(card)))}
+          open={ahead.length === 0 || past.length <= 3}
+          className="group mb-4"
+        >
           <summary className="mb-3 cursor-pointer list-none text-sm font-medium text-muted-foreground">
             Geçmiş turlar ({past.length}) · {filledPast} dolu · <span className="underline-offset-4 group-open:hidden hover:underline">göster</span>
             <span className="hidden underline-offset-4 group-open:inline hover:underline">gizle</span>
@@ -45,7 +50,7 @@ export function PlanPanel({ data }: { data: ChallengePageData }) {
               <SlotRow key={slot.index} slot={slot} data={data} />
             ))}
           </ol>
-        </details>
+        </FilterDetails>
       ) : null}
       {ahead.length > 0 ? (
         <ol className="flex flex-col gap-3">
@@ -81,7 +86,7 @@ function SlotRow({ slot, data }: { slot: PlanSlotView; data: ChallengePageData }
 
   return (
     // While the page is filtered by type, only rounds holding such an item show.
-    <FilterGroup types={slot.entries.map((card) => card.media.mediaType)}>
+    <FilterGroup items={slot.entries.map((card) => entryFilterKey(card))}>
       <li
         className={cn(
           "rounded-xl border bg-card p-3 shadow-xs sm:p-4",
@@ -145,7 +150,7 @@ export function SuggestionsPanel({ data }: { data: ChallengePageData }) {
       >
         Öneriler{" "}
         <span className="font-normal text-muted-foreground">
-          (<FilteredCount types={suggestions.map(({ card }) => card.media.mediaType)} />)
+          (<FilteredCount items={suggestions.map(({ card }) => entryFilterKey(card))} />)
         </span>
       </SectionTitle>
       <p className="mb-4 text-sm text-muted-foreground">
@@ -208,7 +213,7 @@ export function SuggestionsPanel({ data }: { data: ChallengePageData }) {
           })}
         </div>
       )}
-      <FilterEmpty types={suggestions.map(({ card }) => card.media.mediaType)} />
+      <FilterEmpty items={suggestions.map(({ card }) => entryFilterKey(card))} />
     </section>
   );
 }
@@ -218,11 +223,11 @@ export function DroppedPanel({ data }: { data: ChallengePageData }) {
   const dropped = data.plan?.dropped ?? [];
   if (dropped.length === 0) return null;
   return (
-    <details className="group">
+    <FilterDetails items={dropped.map((card) => entryFilterKey(card))} className="group">
       <summary className="mb-3 flex cursor-pointer list-none items-center gap-2 text-sm font-semibold">
         <Badge tone="rose">Elenenler</Badge>
         <span className="text-muted-foreground">
-          <FilteredCount types={dropped.map((card) => card.media.mediaType)} /> · göster
+          <FilteredCount items={dropped.map((card) => entryFilterKey(card))} /> · göster
         </span>
       </summary>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -230,6 +235,6 @@ export function DroppedPanel({ data }: { data: ChallengePageData }) {
           <EntryCard key={card.id} card={card} />
         ))}
       </div>
-    </details>
+    </FilterDetails>
   );
 }

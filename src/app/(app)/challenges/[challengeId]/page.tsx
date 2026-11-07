@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { FilteredCount, ItemFilterProvider, TypeFilterBar } from "@/components/item-filter";
+import { FilteredCount, ItemFilterBar, ItemFilterProvider } from "@/components/item-filter";
 import { PageSkeleton } from "@/components/page-skeleton";
 import { FlashNotice } from "@/components/ui/flash-notice";
 import { SectionTitle } from "@/components/ui/misc";
@@ -50,7 +50,7 @@ async function Challenge({ params, searchParams }: Pick<PageProps<"/challenges/[
   const notes = await listBoardNotes({ challengeId: data.challenge.id }, { id: user.id, canManage: data.access.canManage });
 
   const typeLabels = Object.fromEntries(types.map((type) => [type.slug, `${type.icon} ${type.label}`]));
-  // The type filter offers the types the list holds.
+  // The type filter offers the types the list holds; the search box is there once there are two items.
   const typeCounts = data.mediaTypeCounts.map(({ slug, count }) => {
     const type = types.find((candidate) => candidate.slug === slug);
     return { slug, count, label: type?.label ?? slug, icon: type?.icon ?? "✨" };
@@ -80,7 +80,7 @@ async function Challenge({ params, searchParams }: Pick<PageProps<"/challenges/[
         <FlashNotice id={`removed:${removed}`} message="Öge listeden silindi." params={["removed"]} />
       ) : null}
       <ItemFilterProvider>
-        <TypeFilterBar types={typeCounts} />
+        <ItemFilterBar items={data.filterKeys} types={typeCounts} />
         {data.plan ? (
           <>
             <PlanPanel data={data} />
@@ -99,7 +99,7 @@ async function Challenge({ params, searchParams }: Pick<PageProps<"/challenges/[
               <SectionTitle action={data.entryCount > 1 ? <SortSelect value={boardSort} options={BOARD_SORTS} /> : null}>
                 Ögeler{" "}
                 <span className="font-normal text-muted-foreground">
-                  (<FilteredCount types={data.mediaTypeCounts.flatMap(({ slug, count }) => Array<string>(count).fill(slug))} />)
+                  (<FilteredCount items={data.filterKeys} />)
                 </span>
               </SectionTitle>
               <EntryBoard

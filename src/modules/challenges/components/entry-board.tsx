@@ -1,8 +1,9 @@
 import { Popcorn } from "lucide-react";
-import { FilterEmpty, FilteredCount } from "@/components/item-filter";
+import { FilterDetails, FilterEmpty, FilteredCount } from "@/components/item-filter";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/misc";
 import { EntryCard } from "@/modules/entries/components/entry-card";
+import { entryFilterKey } from "@/modules/entries/filter-key";
 import type { ChallengePageData } from "../queries";
 
 /** Entries grouped by workflow state, in workflow order. Dropped ones stay folded away. */
@@ -18,7 +19,7 @@ export function EntryBoard({ board }: { board: ChallengePageData["board"] }) {
   return (
     <div className="flex flex-col gap-8">
       {board.map(({ state, entries }) => {
-        const types = entries.map((card) => card.media.mediaType);
+        const keys = entries.map((card) => entryFilterKey(card));
         const grid = (
           <>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -26,21 +27,21 @@ export function EntryBoard({ board }: { board: ChallengePageData["board"] }) {
                 <EntryCard key={card.id} card={card} showState={false} />
               ))}
             </div>
-            <FilterEmpty types={types} />
+            <FilterEmpty items={keys} />
           </>
         );
         if (state.category === "dropped") {
           if (entries.length === 0) return null;
           return (
-            <details key={state.id} className="group">
+            <FilterDetails key={state.id} items={keys} className="group">
               <summary className="mb-3 flex cursor-pointer list-none items-center gap-2 text-sm font-semibold">
                 <Badge tone={state.color}>{state.label}</Badge>
                 <span className="text-muted-foreground">
-                  <FilteredCount types={types} /> · göster
+                  <FilteredCount items={keys} /> · göster
                 </span>
               </summary>
               {grid}
-            </details>
+            </FilterDetails>
           );
         }
         return (
@@ -48,7 +49,7 @@ export function EntryBoard({ board }: { board: ChallengePageData["board"] }) {
             <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold">
               <Badge tone={state.color}>{state.label}</Badge>
               <span className="text-muted-foreground">
-                <FilteredCount types={types} />
+                <FilteredCount items={keys} />
               </span>
             </h3>
             {entries.length > 0 ? grid : <p className="text-xs text-muted-foreground">Bu durumda öge yok.</p>}

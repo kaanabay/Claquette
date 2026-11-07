@@ -26,6 +26,7 @@ import { formatShortDate, toDayValue } from "@/lib/short-date";
 import { cn } from "@/lib/utils";
 import { MediaCover } from "@/modules/media/components/media-cover";
 import { MediaTitle } from "@/modules/media/components/media-title";
+import { mediaFilterKey } from "@/modules/media/filter-key";
 import { formatTitle } from "@/modules/media/titles";
 import type { SortKey } from "@/modules/media/sort";
 import {
@@ -43,7 +44,7 @@ type ShareTarget = ListPageData["shareTargets"][number];
 /**
  * The owner's view of a list: drag the handle (or focus it and use the arrow keys) to reorder,
  * add a note, remove an item, or suggest it to a shared list. The new order is saved at once.
- * Filtered by type, the items keep their numbers and dragging pauses (the order covers them all).
+ * Searched or filtered by type, the items keep their numbers and dragging pauses (the order covers them all).
  */
 export function ListItemsEditor({
   listId,
@@ -102,13 +103,15 @@ export function ListItemsEditor({
           {error}
         </p>
       ) : null}
-      {filtering && manual ? <p className="text-xs text-muted-foreground">Filtre açıkken sürükleyerek sıralanmaz; tümünü göstererek sırala.</p> : null}
+      {filtering && manual ? (
+        <p className="text-xs text-muted-foreground">Arama ya da filtre açıkken sürükleyerek sıralanmaz; tümünü göstererek sırala.</p>
+      ) : null}
       <DndContext id={dndId} sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <SortableContext items={order} strategy={verticalListSortingStrategy}>
           <ol className="flex flex-col gap-2">
             {order.map((id, index) => {
               const item = byId.get(id);
-              return item && matchesFilter(filter, { type: item.media.mediaType }) ? (
+              return item && matchesFilter(filter, mediaFilterKey(item.media)) ? (
                 <SortableRow
                   key={id}
                   item={item}

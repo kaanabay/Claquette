@@ -7,6 +7,7 @@ import { EmptyState, SectionTitle } from "@/components/ui/misc";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { toggleVoteAction } from "@/modules/entries/actions";
 import { EntryCard } from "@/modules/entries/components/entry-card";
+import { entryFilterKey } from "@/modules/entries/filter-key";
 import { TakeOffRoundButton } from "@/modules/entries/components/off-round-buttons";
 import { formatTitle } from "@/modules/media/titles";
 import { drawFromPoolAction, selectPoolEntryAction } from "../actions";
@@ -42,7 +43,7 @@ export function PoolPanel({ data }: { data: ChallengePageData }) {
       >
         Ortak havuz{" "}
         <span className="font-normal text-muted-foreground">
-          (<FilteredCount types={pool.candidates.map((card) => card.media.mediaType)} />)
+          (<FilteredCount items={pool.candidates.map((card) => entryFilterKey(card))} />)
         </span>
       </SectionTitle>
       <p className="mb-4 text-sm text-muted-foreground">
@@ -95,7 +96,7 @@ export function PoolPanel({ data }: { data: ChallengePageData }) {
           ))}
         </div>
       )}
-      <FilterEmpty types={pool.candidates.map((card) => card.media.mediaType)} />
+      <FilterEmpty items={pool.candidates.map((card) => entryFilterKey(card))} />
     </section>
   );
 }

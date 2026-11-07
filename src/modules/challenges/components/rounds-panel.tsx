@@ -1,9 +1,10 @@
 import { ArrowRight, CircleCheck, Clock, Hourglass, Plus, UserPen } from "lucide-react";
 import Link from "next/link";
-import { FilterGroup, FilterItem } from "@/components/item-filter";
+import { FilterDetails, FilterGroup, FilterItem } from "@/components/item-filter";
 import { Avatar } from "@/components/ui/avatar";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { entryFilterKey } from "@/modules/entries/filter-key";
 import type { EntryCard } from "@/modules/entries/queries";
 import { describeRoundSummary } from "@/modules/entries/tracking";
 import { MediaTitle } from "@/modules/media/components/media-title";
@@ -27,10 +28,11 @@ export function RoundsPanel({ data, kind }: { data: ChallengePageData; kind: "up
         : "Kendi girilmemiş önerilerini sonradan ekleyebilirsin. Başkalarınınkini kendileri ya da grup yöneticileri girer."
       : "Sıradaki turlara şimdiden öneri yapabilirsin; tur gelince onun önerisi olur.";
   const offers = rounds.some((round) => round.canAdd || round.slots.some((slot) => slot.add));
+  const keys = rounds.flatMap(roundKeys);
 
   return (
     <section aria-label={title}>
-      <details open={kind === "upcoming" || rounds.length <= 3} className="group">
+      <FilterDetails items={keys} open={kind === "upcoming" || rounds.length <= 3} className="group">
         <summary className="mb-3 cursor-pointer list-none text-sm font-medium text-muted-foreground">
           {title} ({rounds.length}) · {filled} dolu ·{" "}
           <span className="underline-offset-4 group-open:hidden hover:underline">göster</span>
@@ -42,7 +44,7 @@ export function RoundsPanel({ data, kind }: { data: ChallengePageData; kind: "up
             <RoundRow key={round.index} round={round} data={data} />
           ))}
         </ol>
-      </details>
+      </FilterDetails>
     </section>
   );
 }
@@ -55,11 +57,10 @@ function RoundRow({ round, data }: { round: RoundView; data: ChallengePageData }
   const addHref = (as?: string) => `/challenges/${data.challenge.id}?add=1&round=${round.index}${as ? `&as=${as}` : ""}`;
   const usesAssignments = round.slots.length > 0;
   const addLabel = past ? (round.items.length > 0 ? "Ekle" : "Doldur") : data.strategy.key === "pool" ? "Ekle" : "Öner";
-  const types = [...round.items, ...round.slots.flatMap((slot) => slot.entries), ...round.extras].map((card) => card.media.mediaType);
 
   return (
-    // While the page is filtered by type, only rounds holding such an item show.
-    <FilterGroup types={types}>
+    // While the page is searched or filtered, only rounds holding a matching item show.
+    <FilterGroup items={roundKeys(round)}>
       <li className={cn("rounded-xl border bg-card p-3 shadow-xs sm:p-4", round.summary.total === 0 && "bg-muted/40")}>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -128,32 +129,38 @@ function PickRow({
   children?: React.ReactNode;
 }) {
   return (
-    <li className="flex flex-col gap-2 rounded-lg bg-muted/60 px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between">
-      <span className="flex items-center gap-2">
-        <Avatar name={pickerName} seed={pickerId} className="size-6 text-[10px]" />
-        <span className="font-medium">{pickerName}</span>
-        <ArrowRight className="size-3.5 text-muted-foreground" />
-        <span>{recipientName ?? "Tüm grup"}</span>
-      </span>
-      <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        {entries.map((card) => (
-          <FilterItem key={card.id} type={card.media.mediaType}>
-            <span className="flex items-center gap-1.5">
-              {card.state.category === "done" ? (
-                <CircleCheck className="size-4 shrink-0 text-success" aria-label="Bitti" />
-              ) : card.tracking?.overdue ? (
-                <Clock className="size-4 shrink-0 text-amber-600 dark:text-amber-400" aria-label="Zamanı geçti" />
-              ) : card.state.category === "pending" ? (
-                <Hourglass className="size-4 shrink-0 text-muted-foreground" aria-label="Cevap bekliyor" />
-              ) : null}
-              <Link href={`/entries/${card.id}`} className="hover:underline">
-                <MediaTitle media={card.media} />
-              </Link>
-            </span>
-          </FilterItem>
-        ))}
-        {children}
-      </span>
-    </li>
+    <FilterGroup items={entries.map((card) => entryFilterKey(card))}>
+      <li className="flex flex-col gap-2 rounded-lg bg-muted/60 px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between">
+        <span className="flex items-center gap-2">
+          <Avatar name={pickerName} seed={pickerId} className="size-6 text-[10px]" />
+          <span className="font-medium">{pickerName}</span>
+          <ArrowRight className="size-3.5 text-muted-foreground" />
+          <span>{recipientName ?? "Tüm grup"}</span>
+        </span>
+        <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          {entries.map((card) => (
+            <FilterItem key={card.id} filterKey={entryFilterKey(card)}>
+              <span className="flex items-center gap-1.5">
+                {card.state.category === "done" ? (
+                  <CircleCheck className="size-4 shrink-0 text-success" aria-label="Bitti" />
+                ) : card.tracking?.overdue ? (
+                  <Clock className="size-4 shrink-0 text-amber-600 dark:text-amber-400" aria-label="Zamanı geçti" />
+                ) : card.state.category === "pending" ? (
+                  <Hourglass className="size-4 shrink-0 text-muted-foreground" aria-label="Cevap bekliyor" />
+                ) : null}
+                <Link href={`/entries/${card.id}`} className="hover:underline">
+                  <MediaTitle media={card.media} />
+                </Link>
+              </span>
+            </FilterItem>
+          ))}
+          {children}
+        </span>
+      </li>
+    </FilterGroup>
   );
 }
+
+/** Every item of a round, for the filter (assigned picks and the rest). */
+const roundKeys = (round: RoundView) =>
+  [...round.items, ...round.slots.flatMap((slot) => slot.entries), ...round.extras].map((card) => entryFilterKey(card));

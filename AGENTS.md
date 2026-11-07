@@ -51,8 +51,10 @@ Rules that keep this codebase working:
   round's item without a date (never overdue). A pool candidate someone settles alone leaves the pool for it, and one
   nobody will finish is dropped (`stateAfterProgress`). Moves return where the item was, for "Geri al" (`takeOffRound`,
   `returnFromOffRound`). "İzlemeyeceğim" (`skipped`) settles a person like finishing does.
-- Pages filter their items in place (`src/components/item-filter.tsx`): wrap item sections in `ItemFilterProvider`;
-  `EntryCard` follows the filter itself, other item markup uses `FilterItem` / `FilterGroup`, counts `FilteredCount`.
+- Pages search and filter their items in place (`src/components/item-filter.tsx`): wrap item sections in
+  `ItemFilterProvider` and show `ItemFilterBar`. Each item has a `FilterKey` (`mediaFilterKey`, `entryFilterKey`; text
+  folded by `src/lib/search-text.ts`); `EntryCard` follows the filter itself, other item markup uses `FilterItem`,
+  `FilterGroup` or `FilterDetails` (a fold), counts `FilteredCount`.
 - On lists without planning an addition may name any round (`targets.ts`: past, current, or on a calendar ahead,
   created with `createRoundsThrough`); the strategy's own `suggestionOptions` is asked about that round
   (`roundOptions`). Group admins may add for another participant (`as`, `canAddAs`); the item is credited to them and
