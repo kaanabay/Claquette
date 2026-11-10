@@ -3,10 +3,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+import { Fold, ShowMore } from "@/components/fold";
 import { ItemFilterBar, ItemFilterProvider } from "@/components/item-filter";
 import { BackLink, PageSkeleton } from "@/components/page-skeleton";
 import { Avatar } from "@/components/ui/avatar";
-import { SectionTitle } from "@/components/ui/misc";
 import { formatDate } from "@/lib/dates";
 import { getCurrentUser, requireUser } from "@/modules/auth/session";
 import { todayIn } from "@/modules/challenges/domain/cadence";
@@ -93,9 +93,8 @@ async function Profile({ params }: Pick<PageProps<"/people/[userId]">, "params">
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="flex min-w-0 flex-col gap-8">
           {now.length > 0 ? (
-            <section>
-              <SectionTitle>Şu an</SectionTitle>
-              <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Fold remember="profile-now" title="Şu an">
+              <ShowMore initial={4} as="ul" className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {now.map((item) => (
                   <li key={item.entryId} className="flex items-center gap-3 rounded-xl border bg-card p-3 shadow-xs">
                     <MediaCover src={item.imageUrl} title={formatTitle(item)} icon={item.icon} className="w-10" />
@@ -112,27 +111,31 @@ async function Profile({ params }: Pick<PageProps<"/people/[userId]">, "params">
                     </div>
                   </li>
                 ))}
-              </ul>
-            </section>
+              </ShowMore>
+            </Fold>
           ) : null}
 
-          <section>
-            <SectionTitle>Geçmiş</SectionTitle>
+          <Fold remember="profile-history" title="Geçmiş">
             <ItemFilterProvider>
               <ItemFilterBar items={history.map((item) => item.filterKey)} types={kinds} className="mb-4" />
-              <ProfileHistory items={history} />
+              <ProfileHistory items={history.map((item) => ({ ...item, createdAt: item.createdAt.toISOString() }))} />
             </ItemFilterProvider>
             {historyTruncated ? <p className="mt-4 text-xs text-muted-foreground">Son {history.length} hareket gösteriliyor.</p> : null}
-          </section>
+          </Fold>
         </div>
 
-        <aside className="flex min-w-0 flex-col gap-4">
-          <SectionTitle>Herkese açık listeleri</SectionTitle>
-          {publicLists.length > 0 ? (
-            publicLists.map((list) => <ListCard key={list.id} list={list} />)
-          ) : (
-            <p className="text-sm text-muted-foreground">{isSelf ? "Herkese açık listen yok." : "Herkese açık listesi yok."}</p>
-          )}
+        <aside className="min-w-0">
+          <Fold remember="profile-lists" title="Herkese açık listeleri">
+            {publicLists.length > 0 ? (
+              <ShowMore initial={4} className="flex flex-col gap-4">
+                {publicLists.map((list) => (
+                  <ListCard key={list.id} list={list} />
+                ))}
+              </ShowMore>
+            ) : (
+              <p className="text-sm text-muted-foreground">{isSelf ? "Herkese açık listen yok." : "Herkese açık listesi yok."}</p>
+            )}
+          </Fold>
         </aside>
       </div>
     </div>

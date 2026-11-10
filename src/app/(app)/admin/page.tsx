@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import { BackLink, PageSkeleton } from "@/components/page-skeleton";
+import { ShowMore } from "@/components/fold";
 import { Avatar } from "@/components/ui/avatar";
 import { PersonLink } from "@/modules/people/components/person-link";
 import { Badge } from "@/components/ui/badge";
@@ -43,7 +44,7 @@ async function Admin() {
           <CardTitle>Gruplar ({groups.length})</CardTitle>
         </CardHeader>
         <CardContent>
-          <ul className="flex flex-col">
+          <ShowMore initial={10} step={20} as="ul" className="flex flex-col">
             {groups.map((group) => (
               <li key={group.id} className="border-b last:border-0">
                 <Link href={`/groups/${group.id}`} className="flex items-center gap-3 py-3 text-sm hover:opacity-80">
@@ -58,7 +59,7 @@ async function Admin() {
                 </Link>
               </li>
             ))}
-          </ul>
+          </ShowMore>
         </CardContent>
       </Card>
 
@@ -68,7 +69,7 @@ async function Admin() {
           <CardDescription>Şifresini unutan biri için geçici şifre oluşturabilirsin; şifreler şifrelenmiş saklandığı için kimse eskisini göremez.</CardDescription>
         </CardHeader>
         <CardContent>
-          <ul className="flex flex-col">
+          <ShowMore initial={10} step={20} as="ul" className="flex flex-col">
             {users.map((user) => (
               <li key={user.id} className="flex flex-col gap-2 border-b py-3 last:border-0 sm:flex-row sm:items-center sm:justify-between">
                 <span className="flex min-w-0 items-center gap-3 text-sm">
@@ -88,7 +89,7 @@ async function Admin() {
                 {user.isViewer ? null : <ResetPasswordButton userId={user.id} name={user.name} />}
               </li>
             ))}
-          </ul>
+          </ShowMore>
         </CardContent>
       </Card>
     </div>

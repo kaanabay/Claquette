@@ -5,6 +5,7 @@ import { PageSkeleton } from "@/components/page-skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState, SectionTitle } from "@/components/ui/misc";
 import { requireUser } from "@/modules/auth/session";
+import { ShowMore } from "@/components/fold";
 import { ListCard } from "@/modules/lists/components/list-card";
 import { CreateListForm } from "@/modules/lists/components/list-forms";
 import { listMyLists } from "@/modules/lists/queries";
@@ -38,11 +39,11 @@ async function MyLists() {
             Listeler <span className="font-normal text-muted-foreground">({lists.length})</span>
           </SectionTitle>
           {lists.length > 0 ? (
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <ShowMore initial={12} className="grid grid-cols-1 gap-3 md:grid-cols-2">
               {lists.map((list) => (
                 <ListCard key={list.id} list={list} />
               ))}
-            </div>
+            </ShowMore>
           ) : (
             <EmptyState icon={<Bookmark />} title="Henüz listen yok">
               İzlemek istediklerin ya da en sevdiklerin için ilk listeni oluştur.

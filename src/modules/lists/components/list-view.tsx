@@ -1,4 +1,5 @@
 import { CalendarDays, ExternalLink } from "lucide-react";
+import { ShowMore } from "@/components/fold";
 import { FilterItem } from "@/components/item-filter";
 import { EmptyState } from "@/components/ui/misc";
 import { formatShortDate } from "@/lib/short-date";
@@ -17,7 +18,7 @@ export function ListView({ items, isRanked, manual }: { items: ListPageData["ite
     return <EmptyState title="Bu liste henüz boş" />;
   }
   return (
-    <ol className="flex flex-col gap-3">
+    <ShowMore initial={50} items={items.map((item) => mediaFilterKey(item.media))} as="ol" className="flex flex-col gap-3">
       {items.map((item, index) => {
         const meta = [item.media.year, item.media.creators.slice(0, 3).join(", ")].filter(Boolean).join(" · ");
         return (
@@ -55,6 +56,6 @@ export function ListView({ items, isRanked, manual }: { items: ListPageData["ite
           </FilterItem>
         );
       })}
-    </ol>
+    </ShowMore>
   );
 }

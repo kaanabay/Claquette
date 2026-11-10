@@ -1,8 +1,8 @@
 import { CalendarOff } from "lucide-react";
 import Link from "next/link";
-import { FilterDetails, FilterEmpty, FilteredCount } from "@/components/item-filter";
+import { Fold, ShowMore } from "@/components/fold";
+import { FilterEmpty, FilteredCount } from "@/components/item-filter";
 import { buttonVariants } from "@/components/ui/button";
-import { SectionTitle } from "@/components/ui/misc";
 import { EntryCard } from "@/modules/entries/components/entry-card";
 import { entryFilterKey } from "@/modules/entries/filter-key";
 import { OFF_ROUND } from "@/modules/entries/placement";
@@ -19,21 +19,24 @@ export function OffRoundPanel({ data }: { data: ChallengePageData }) {
   const doneKeys = done.map((card) => entryFilterKey(card));
 
   return (
-    <section>
-      <SectionTitle
-        action={
-          canAdd ? (
-            <Link href={`/challenges/${data.challenge.id}?add=1&round=off`} className={buttonVariants({ variant: "outline", size: "sm" })}>
-              <CalendarOff /> Tur dışına ekle
-            </Link>
-          ) : null
-        }
-      >
-        {OFF_ROUND}{" "}
-        <span className="font-normal text-muted-foreground">
-          (<FilteredCount items={openKeys} />)
-        </span>
-      </SectionTitle>
+    <Fold
+      remember="off-round"
+      title={
+        <>
+          {OFF_ROUND}{" "}
+          <span className="font-normal text-muted-foreground">
+            (<FilteredCount items={openKeys} />)
+          </span>
+        </>
+      }
+      action={
+        canAdd ? (
+          <Link href={`/challenges/${data.challenge.id}?add=1&round=off`} className={buttonVariants({ variant: "outline", size: "sm" })}>
+            <CalendarOff /> Tur dışına ekle
+          </Link>
+        ) : null
+      }
+    >
       <p className="mb-4 text-sm text-muted-foreground">
         Turlara girmeyen ögeler. Herkes kendi zamanında bitirip işaretler; herkes bitirince ya da pas geçince tamamlanır.
       </p>
@@ -41,30 +44,38 @@ export function OffRoundPanel({ data }: { data: ChallengePageData }) {
         <p className="text-xs text-muted-foreground">Bekleyen tur dışı öge yok.</p>
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <ShowMore initial={6} items={openKeys} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {open.map((card) => (
               <EntryCard key={card.id} card={card} showState={false} showRound={false} byline="added" />
             ))}
-          </div>
+          </ShowMore>
           <FilterEmpty items={openKeys} />
         </>
       )}
       {done.length > 0 ? (
-        <FilterDetails items={doneKeys} className="group mt-4">
-          <summary className="mb-3 flex cursor-pointer list-none items-center gap-2 text-sm font-semibold">
-            Bitenler
-            <span className="font-normal text-muted-foreground">
-              <FilteredCount items={doneKeys} /> · <span className="group-open:hidden">göster</span>
-              <span className="hidden group-open:inline">gizle</span>
-            </span>
-          </summary>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        // Finished: over, so folded.
+        <Fold
+          level={3}
+          defaultOpen={false}
+          remember="off-round-done"
+          items={doneKeys}
+          className="mt-4"
+          title={
+            <>
+              Bitenler{" "}
+              <span className="font-normal text-muted-foreground">
+                <FilteredCount items={doneKeys} />
+              </span>
+            </>
+          }
+        >
+          <ShowMore initial={6} items={doneKeys} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {done.map((card) => (
               <EntryCard key={card.id} card={card} showRound={false} byline="added" />
             ))}
-          </div>
-        </FilterDetails>
+          </ShowMore>
+        </Fold>
       ) : null}
-    </section>
+    </Fold>
   );
 }

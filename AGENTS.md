@@ -53,8 +53,8 @@ Rules that keep this codebase working:
   `returnFromOffRound`). "İzlemeyeceğim" (`skipped`) settles a person like finishing does.
 - Pages search and filter their items in place (`src/components/item-filter.tsx`): wrap item sections in
   `ItemFilterProvider` and show `ItemFilterBar`. Each item has a `FilterKey` (`mediaFilterKey`, `entryFilterKey`; text
-  folded by `src/lib/search-text.ts`); `EntryCard` follows the filter itself, other item markup uses `FilterItem`,
-  `FilterGroup` or `FilterDetails` (a fold), counts `FilteredCount`.
+  folded by `src/lib/search-text.ts`); `EntryCard` follows the filter itself, other item markup uses `FilterItem` or
+  `FilterGroup`, folds and long lists take the keys (`Fold items`, `ShowMore items`), counts `FilteredCount`.
 - On lists without planning an addition may name any round (`targets.ts`: past, current, or on a calendar ahead,
   created with `createRoundsThrough`); the strategy's own `suggestionOptions` is asked about that round
   (`roundOptions`). Group admins may add for another participant (`as`, `canAddAs`); the item is credited to them and
@@ -79,6 +79,9 @@ Rules that keep this codebase working:
   line (a `truncate`d title, a pasted link). Long words break by default (`overflow-wrap` on `body`), except in a box
   sized by its content (`items-start`, `w-fit`): give free text there `wrap-anywhere`. Dropdown panels
   (`absolute right-0`) open leftwards from their trigger, so such triggers sit at the end of their row.
+- Sections fold (`Fold`, `src/components/fold.tsx`): what is on now starts open, what is over or still ahead starts
+  folded, and the viewer's last choice per kind of section is kept in the browser (`remember`). Long lists show their
+  first few with "Daha fazla göster" (`ShowMore`; logs five, card grids six); a search shows every match and opens folds.
 - Profiles (`/people/<userId>`, `src/modules/people`) open to whoever shares a group with the person (`canViewProfile`)
   and show only what happened in the viewer's own groups (the site admin: every group); anyone else gets a 404, as if
   the person didn't exist. Link people with `PersonLink` / `profileHref`.

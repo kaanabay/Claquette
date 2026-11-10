@@ -1,10 +1,11 @@
 import { ChevronRight, Sparkles, Users } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
-import { FilterGroup, ItemFilterBar, ItemFilterProvider } from "@/components/item-filter";
+import { Fold, ShowMore } from "@/components/fold";
+import { ItemFilterBar, ItemFilterProvider } from "@/components/item-filter";
 import { PageSkeleton } from "@/components/page-skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { EmptyState, SectionTitle } from "@/components/ui/misc";
+import { EmptyState } from "@/components/ui/misc";
 import { requireUser } from "@/modules/auth/session";
 import { ChallengeCard } from "@/modules/challenges/components/challenge-card";
 import { summaryFilterKey } from "@/modules/challenges/filter-key";
@@ -60,8 +61,7 @@ async function Home() {
         {assigned ? <AssignedSection assigned={assigned} /> : null}
 
         {turns.length > 0 ? (
-          <section>
-            <SectionTitle>Öneri sırası sende</SectionTitle>
+          <Fold remember="home-turns" title="Öneri sırası sende">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {turns.map((turn) => (
                 <Link
@@ -83,51 +83,44 @@ async function Home() {
                 </Link>
               ))}
             </div>
-          </section>
+          </Fold>
         ) : null}
 
         {awaitingAnswer.length > 0 ? (
-          <FilterGroup items={awaitingKeys}>
-            <section>
-              <SectionTitle>Cevap bekleyen öneriler</SectionTitle>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {awaitingAnswer.map((card) => (
-                  <EntryCard key={card.id} card={card} showChallenge />
-                ))}
-              </div>
-            </section>
-          </FilterGroup>
+          <Fold remember="home-awaiting" items={awaitingKeys} title="Cevap bekleyen öneriler">
+            <ShowMore initial={6} items={awaitingKeys} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {awaitingAnswer.map((card) => (
+                <EntryCard key={card.id} card={card} showChallenge />
+              ))}
+            </ShowMore>
+          </Fold>
         ) : null}
 
         {sharedLists.length > 0 ? (
-          <FilterGroup items={listKeys}>
-            <section>
-              <SectionTitle>Ortak listelerin</SectionTitle>
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                {sharedLists.map((summary) => (
-                  <ChallengeCard key={summary.id} summary={summary} typeIcons={typeIcons} showGroup />
-                ))}
-              </div>
-            </section>
-          </FilterGroup>
+          <Fold remember="home-lists" items={listKeys} title="Ortak listelerin">
+            <ShowMore initial={6} items={listKeys} className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              {sharedLists.map((summary) => (
+                <ChallengeCard key={summary.id} summary={summary} typeIcons={typeIcons} showGroup />
+              ))}
+            </ShowMore>
+          </Fold>
         ) : null}
       </ItemFilterProvider>
 
       <section className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <div>
-          <SectionTitle>Grupların</SectionTitle>
+        <Fold remember="home-groups" title="Grupların">
           {groups.length > 0 ? (
-            <div className="flex flex-col gap-3">
+            <ShowMore initial={5} className="flex flex-col gap-3">
               {groups.map((group) => (
                 <GroupCard key={group.id} group={group} />
               ))}
-            </div>
+            </ShowMore>
           ) : (
             <EmptyState icon={<Users />} title="Henüz bir grubun yok">
               Arkadaşlarınla bir grup kur; ortak listeleri grup içinde oluşturursunuz. Bir kişiyle de başlayabilirsin.
             </EmptyState>
           )}
-        </div>
+        </Fold>
         <div className="flex flex-col gap-4">
           <Card>
             <CardHeader>

@@ -1,5 +1,6 @@
 import { Activity as ActivityIcon } from "lucide-react";
 import Link from "next/link";
+import { ShowMore } from "@/components/fold";
 import { Avatar } from "@/components/ui/avatar";
 import { EmptyState } from "@/components/ui/misc";
 import { timeAgo } from "@/lib/dates";
@@ -7,7 +8,10 @@ import { PersonLink } from "@/modules/people/components/person-link";
 import { describeActivity } from "../describe";
 import type { ActivityItem } from "../service";
 
-/** `context` = "entry" when rendered on the entry page itself (no self-links, no challenge names). */
+/**
+ * A log of what happened, newest first: the latest five, more on request.
+ * `context` = "entry" when rendered on the entry page itself (no self-links, no challenge names).
+ */
 export function ActivityFeed({ items, context = "group" }: { items: ActivityItem[]; context?: "group" | "entry" }) {
   if (items.length === 0) {
     return (
@@ -17,7 +21,7 @@ export function ActivityFeed({ items, context = "group" }: { items: ActivityItem
     );
   }
   return (
-    <ol className="flex flex-col gap-4">
+    <ShowMore initial={5} step={15} as="ol" className="flex flex-col gap-4">
       {items.map((item) => {
         const text = describeActivity(item.type, item.data, Boolean(item.actorName));
         return (
@@ -61,6 +65,6 @@ export function ActivityFeed({ items, context = "group" }: { items: ActivityItem
           </li>
         );
       })}
-    </ol>
+    </ShowMore>
   );
 }

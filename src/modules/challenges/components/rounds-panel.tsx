@@ -1,6 +1,7 @@
 import { ArrowRight, CircleCheck, Clock, Hourglass, Plus, UserPen } from "lucide-react";
 import Link from "next/link";
-import { FilterDetails, FilterGroup, FilterItem } from "@/components/item-filter";
+import { Fold, ShowMore } from "@/components/fold";
+import { FilterGroup, FilterItem } from "@/components/item-filter";
 import { Avatar } from "@/components/ui/avatar";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -30,22 +31,29 @@ export function RoundsPanel({ data, kind }: { data: ChallengePageData; kind: "up
   const offers = rounds.some((round) => round.canAdd || round.slots.some((slot) => slot.add));
   const keys = rounds.flatMap(roundKeys);
 
+  // Rounds ahead and rounds over start folded: what is on now is the round panel above.
   return (
-    <section aria-label={title}>
-      <FilterDetails items={keys} open={kind === "upcoming" || rounds.length <= 3} className="group">
-        <summary className="mb-3 cursor-pointer list-none text-sm font-medium text-muted-foreground">
-          {title} ({rounds.length}) · {filled} dolu ·{" "}
-          <span className="underline-offset-4 group-open:hidden hover:underline">göster</span>
-          <span className="hidden underline-offset-4 group-open:inline hover:underline">gizle</span>
-        </summary>
-        {offers ? <p className="mb-3 text-sm text-muted-foreground">{hint}</p> : null}
-        <ol className="flex flex-col gap-3">
-          {rounds.map((round) => (
-            <RoundRow key={round.index} round={round} data={data} />
-          ))}
-        </ol>
-      </FilterDetails>
-    </section>
+    <Fold
+      label={title}
+      defaultOpen={false}
+      remember={`rounds-${kind}`}
+      items={keys}
+      title={
+        <>
+          {title}{" "}
+          <span className="font-normal text-muted-foreground">
+            ({rounds.length}) · {filled} dolu
+          </span>
+        </>
+      }
+    >
+      {offers ? <p className="mb-3 text-sm text-muted-foreground">{hint}</p> : null}
+      <ShowMore initial={6} as="ol" className="flex flex-col gap-3">
+        {rounds.map((round) => (
+          <RoundRow key={round.index} round={round} data={data} />
+        ))}
+      </ShowMore>
+    </Fold>
   );
 }
 

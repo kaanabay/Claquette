@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+import { Fold } from "@/components/fold";
 import { FilteredCount, ItemFilterBar, ItemFilterProvider } from "@/components/item-filter";
 import { PageSkeleton } from "@/components/page-skeleton";
 import { FlashNotice } from "@/components/ui/flash-notice";
-import { SectionTitle } from "@/components/ui/misc";
 import { isUuid } from "@/lib/utils";
 import { requireUser } from "@/modules/auth/session";
 import { Board } from "@/modules/boards/components/board";
@@ -95,20 +95,25 @@ async function Challenge({ params, searchParams }: Pick<PageProps<"/challenges/[
             <RoundsPanel data={data} kind="past" />
             <PoolPanel data={data} />
             <OffRoundPanel data={data} />
-            <section>
-              <SectionTitle action={data.entryCount > 1 ? <SortSelect value={boardSort} options={BOARD_SORTS} /> : null}>
-                Ögeler{" "}
-                <span className="font-normal text-muted-foreground">
-                  (<FilteredCount items={data.filterKeys} />)
-                </span>
-              </SectionTitle>
+            <Fold
+              remember="board"
+              title={
+                <>
+                  Ögeler{" "}
+                  <span className="font-normal text-muted-foreground">
+                    (<FilteredCount items={data.filterKeys} />)
+                  </span>
+                </>
+              }
+              action={data.entryCount > 1 ? <SortSelect value={boardSort} options={BOARD_SORTS} /> : null}
+            >
               <EntryBoard
                 board={data.board.map((column) => ({
                   ...column,
                   entries: sortRows(column.entries, boardSort, (card) => ({ addedAt: card.createdAt, media: card.media })),
                 }))}
               />
-            </section>
+            </Fold>
           </>
         )}
       </ItemFilterProvider>

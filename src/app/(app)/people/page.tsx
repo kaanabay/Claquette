@@ -2,6 +2,7 @@ import { UserRound, Users } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
+import { ShowMore } from "@/components/fold";
 import { FilterEmpty, FilterItem, ItemFilterBar, ItemFilterProvider } from "@/components/item-filter";
 import { PageSkeleton } from "@/components/page-skeleton";
 import { Avatar } from "@/components/ui/avatar";
@@ -51,7 +52,7 @@ async function People() {
       ) : (
         <ItemFilterProvider>
           <ItemFilterBar items={people.map((person) => person.filterKey)} />
-          <ul className="flex flex-col gap-3">
+          <ShowMore initial={20} items={people.map((person) => person.filterKey)} as="ul" className="flex flex-col gap-3">
             {people.map((person) => (
               <FilterItem key={person.id} filterKey={person.filterKey}>
                 <li>
@@ -74,7 +75,7 @@ async function People() {
                 </li>
               </FilterItem>
             ))}
-          </ul>
+          </ShowMore>
           <FilterEmpty items={people.map((person) => person.filterKey)} message="Aramaya uyan kişi yok." />
         </ItemFilterProvider>
       )}

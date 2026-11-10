@@ -4,12 +4,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { BackLink, PageSkeleton } from "@/components/page-skeleton";
+import { Fold, ShowMore } from "@/components/fold";
 import { Avatar, AvatarStack } from "@/components/ui/avatar";
 import { PersonLink, profileHref } from "@/modules/people/components/person-link";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { EmptyState, SectionTitle } from "@/components/ui/misc";
+import { EmptyState } from "@/components/ui/misc";
 import { ActivityFeed } from "@/modules/activity/components/activity-feed";
 import { requireUser } from "@/modules/auth/session";
 import { Board } from "@/modules/boards/components/board";
@@ -76,14 +77,13 @@ async function Group({ params }: Pick<PageProps<"/groups/[groupId]">, "params">)
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="flex min-w-0 flex-col gap-10">
-          <section>
-            <SectionTitle>Ortak listeler</SectionTitle>
+          <Fold remember="group-lists" title="Ortak listeler">
             {current.length > 0 ? (
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <ShowMore initial={6} className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 {current.map((summary) => (
                   <ChallengeCard key={summary.id} summary={summary} typeIcons={typeIcons} />
                 ))}
-              </div>
+              </ShowMore>
             ) : (
               <EmptyState icon={<Sparkles />} title="İlk ortak listenizi oluşturun">
                 <p>Yıllık kitap listesi, aylık yönetmen seçkisi, haftalık film takası…</p>
@@ -93,16 +93,25 @@ async function Group({ params }: Pick<PageProps<"/groups/[groupId]">, "params">)
               </EmptyState>
             )}
             {archived.length > 0 ? (
-              <details className="mt-6">
-                <summary className="cursor-pointer text-sm font-medium text-muted-foreground">Arşiv ({archived.length})</summary>
-                <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+              <Fold
+                level={3}
+                defaultOpen={false}
+                remember="group-archive"
+                className="mt-6"
+                title={
+                  <>
+                    Arşiv <span className="font-normal text-muted-foreground">({archived.length})</span>
+                  </>
+                }
+              >
+                <ShowMore initial={6} className="grid grid-cols-1 gap-3 md:grid-cols-2">
                   {archived.map((summary) => (
                     <ChallengeCard key={summary.id} summary={summary} typeIcons={typeIcons} />
                   ))}
-                </div>
-              </details>
+                </ShowMore>
+              </Fold>
             ) : null}
-          </section>
+          </Fold>
 
           <Board
             notes={notes}
@@ -110,10 +119,9 @@ async function Group({ params }: Pick<PageProps<"/groups/[groupId]">, "params">)
             hint="Grubun genel notları: birlikte izlenecekler, okunacaklar, bağlantılar. Herkes ekleyip düzenleyebilir; işaretlenebilir liste de olur."
           />
 
-          <section>
-            <SectionTitle>Son hareketler</SectionTitle>
+          <Fold remember="group-activity" title="Son hareketler">
             <ActivityFeed items={activity} />
-          </section>
+          </Fold>
         </div>
 
         <aside className="flex flex-col gap-4">

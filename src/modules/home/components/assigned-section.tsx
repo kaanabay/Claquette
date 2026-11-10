@@ -1,15 +1,16 @@
 import { CalendarOff } from "lucide-react";
-import { FilterDetails, FilterEmpty, FilteredCount, FilterGroup } from "@/components/item-filter";
-import { SectionTitle } from "@/components/ui/misc";
+import { Fold, ShowMore } from "@/components/fold";
+import { FilterEmpty, FilteredCount } from "@/components/item-filter";
 import { EntryCard } from "@/modules/entries/components/entry-card";
 import { entryFilterKey } from "@/modules/entries/filter-key";
 import { OFF_ROUND } from "@/modules/entries/placement";
 import type { AssignedItems } from "../queries";
 
+// What is due or on now starts open; what comes later starts folded.
 const GROUPS = [
-  { key: "overdue", title: "Zamanı geçenler" },
-  { key: "current", title: "Devam edenler" },
-  { key: "upcoming", title: "Sıradakiler" },
+  { key: "overdue", title: "Zamanı geçenler", open: true },
+  { key: "current", title: "Devam edenler", open: true },
+  { key: "upcoming", title: "Sıradakiler", open: false },
 ] as const;
 
 /**
@@ -21,55 +22,67 @@ export function AssignedSection({ assigned }: { assigned: AssignedItems }) {
   const offRound = assigned.offRound;
   const keysOf = (items: AssignedItems[keyof AssignedItems]) => items.map(({ card }) => entryFilterKey(card, true));
   return (
-    <section>
-      <SectionTitle>Bana atananlar</SectionTitle>
+    <Fold remember="home-assigned" title="Bana atananlar">
       {total === 0 ? (
         <p className="text-sm text-muted-foreground">Şu an bitirmen gereken bir şey yok.</p>
       ) : (
         <div className="flex flex-col gap-6">
-          {GROUPS.map(({ key, title }) =>
+          {GROUPS.map(({ key, title, open }) =>
             assigned[key].length > 0 ? (
-              <FilterGroup key={key} items={keysOf(assigned[key])}>
-                <div className="flex flex-col gap-3">
-                  <h3 className="flex items-center gap-2 text-sm font-semibold">
+              <Fold
+                key={key}
+                level={3}
+                defaultOpen={open}
+                remember={`home-assigned-${key}`}
+                items={keysOf(assigned[key])}
+                title={
+                  <>
                     {title}{" "}
                     <span className="font-normal text-muted-foreground">
                       <FilteredCount items={keysOf(assigned[key])} />
                     </span>
-                  </h3>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    {assigned[key].map(({ card, note }) => (
-                      <EntryCard key={card.id} card={card} showChallenge showState={false} roundNote={note} />
-                    ))}
-                  </div>
-                </div>
-              </FilterGroup>
+                  </>
+                }
+              >
+                <ShowMore initial={6} items={keysOf(assigned[key])} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {assigned[key].map(({ card, note }) => (
+                    <EntryCard key={card.id} card={card} showChallenge showState={false} roundNote={note} />
+                  ))}
+                </ShowMore>
+              </Fold>
             ) : null,
           )}
         </div>
       )}
       <FilterEmpty items={[...GROUPS.flatMap(({ key }) => keysOf(assigned[key])), ...keysOf(offRound)]} />
       {offRound.length > 0 ? (
-        <FilterDetails items={keysOf(offRound)} className="group mt-6">
-          <summary className="mb-3 flex cursor-pointer list-none items-center gap-2 text-sm font-semibold">
-            <CalendarOff className="size-4 text-muted-foreground" aria-hidden />
-            {OFF_ROUND}
-            <span className="font-normal text-muted-foreground">
-              <FilteredCount items={keysOf(offRound)} /> · <span className="group-open:hidden">göster</span>
-              <span className="hidden group-open:inline">gizle</span>
-            </span>
-          </summary>
+        <Fold
+          level={3}
+          defaultOpen={false}
+          remember="home-assigned-off-round"
+          items={keysOf(offRound)}
+          className="mt-6"
+          title={
+            <>
+              <CalendarOff className="size-4 text-muted-foreground" aria-hidden />
+              {OFF_ROUND}{" "}
+              <span className="font-normal text-muted-foreground">
+                <FilteredCount items={keysOf(offRound)} />
+              </span>
+            </>
+          }
+        >
           <p className="mb-3 text-xs text-muted-foreground">
             Turlara girmeyen, tarihi olmayan ögeler; kendi zamanında bitirebilirsin. Yapmayacaksan kartındaki “İzlemeyeceğim” ya da
             “Okumayacağım” düğmesi onu buradan kaldırır.
           </p>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <ShowMore initial={6} items={keysOf(offRound)} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {offRound.map(({ card }) => (
               <EntryCard key={card.id} card={card} showChallenge showState={false} showRound={false} />
             ))}
-          </div>
-        </FilterDetails>
+          </ShowMore>
+        </Fold>
       ) : null}
-    </section>
+    </Fold>
   );
 }

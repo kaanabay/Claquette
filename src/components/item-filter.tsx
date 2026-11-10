@@ -2,11 +2,11 @@
 
 // Searching and filtering a page's items in place, without a round trip: the page wraps its item
 // sections in ItemFilterProvider and shows ItemFilterBar; every item reads the filter through
-// FilterItem (EntryCard does it itself) with its FilterKey, so sections, folds and counts follow
-// along. Outside a provider nothing is filtered.
+// FilterItem (EntryCard does it itself) with its FilterKey, so sections, folds (components/fold.tsx)
+// and counts follow along. Outside a provider nothing is filtered.
 
 import { Search, X } from "lucide-react";
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 import { matchesWords, searchWords, type FilterKey } from "@/lib/search-text";
 import { cn } from "@/lib/utils";
 import { Input } from "./ui/fields";
@@ -151,34 +151,5 @@ export function FilterEmpty({ items, message, className }: { items: readonly Fil
     <p className={cn("text-xs text-muted-foreground", className)}>
       {message ?? (isSearching(filter) ? "Aramaya uyan öge yok." : "Bu türde öge yok.")}
     </p>
-  );
-}
-
-/**
- * A fold (<details>) of items: hidden while the filter leaves none of them, opened while a search finds
- * one inside (closing it again is up to the viewer).
- */
-export function FilterDetails({
-  items,
-  open,
-  className,
-  children,
-}: {
-  items: readonly FilterKey[];
-  open?: boolean;
-  className?: string;
-  children: ReactNode;
-}) {
-  const filter = useItemFilter();
-  const ref = useRef<HTMLDetailsElement>(null);
-  const matched = items.some((key) => matchesFilter(filter, key));
-  const words = filter?.words.join(" ") ?? "";
-  useEffect(() => {
-    if (words && matched && ref.current) ref.current.open = true;
-  }, [words, matched]);
-  return (
-    <details ref={ref} open={open} hidden={isFiltering(filter) && !matched} className={className}>
-      {children}
-    </details>
   );
 }

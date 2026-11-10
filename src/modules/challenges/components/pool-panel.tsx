@@ -1,9 +1,10 @@
 import { Dices, Inbox, Plus, ThumbsUp, Ticket } from "lucide-react";
 import Link from "next/link";
+import { Fold, ShowMore } from "@/components/fold";
 import { FilterEmpty, FilteredCount } from "@/components/item-filter";
 import { ActionForm } from "@/components/ui/action-form";
 import { buttonVariants } from "@/components/ui/button";
-import { EmptyState, SectionTitle } from "@/components/ui/misc";
+import { EmptyState } from "@/components/ui/misc";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { toggleVoteAction } from "@/modules/entries/actions";
 import { EntryCard } from "@/modules/entries/components/entry-card";
@@ -26,11 +27,20 @@ export function PoolPanel({ data }: { data: ChallengePageData }) {
   const canAct = access.isParticipant && challenge.status === "active";
   const canSelect = canAct && round !== null && pool.openSlots > 0;
   const { rules } = pool;
+  const keys = pool.candidates.map((card) => entryFilterKey(card));
 
   return (
-    <section>
-      <SectionTitle
-        action={
+    <Fold
+      remember="pool"
+      title={
+        <>
+          Ortak havuz{" "}
+          <span className="font-normal text-muted-foreground">
+            (<FilteredCount items={keys} />)
+          </span>
+        </>
+      }
+      action={
           canSelect && pool.candidates.length > 0 && rules.selection !== "manual" ? (
             <ActionForm action={drawFromPoolAction} className="flex flex-col items-end gap-1">
               <input type="hidden" name="challengeId" value={challenge.id} />
@@ -39,13 +49,8 @@ export function PoolPanel({ data }: { data: ChallengePageData }) {
               </SubmitButton>
             </ActionForm>
           ) : null
-        }
-      >
-        Ortak havuz{" "}
-        <span className="font-normal text-muted-foreground">
-          (<FilteredCount items={pool.candidates.map((card) => entryFilterKey(card))} />)
-        </span>
-      </SectionTitle>
+      }
+    >
       <p className="mb-4 text-sm text-muted-foreground">
         Her tur {rules.picksPerRound} öge {METHOD_TEXT[rules.selection]}.
         {rules.autoDraw ? " Yeni tur başladığında seçim otomatik yapılır." : ""}
@@ -63,7 +68,7 @@ export function PoolPanel({ data }: { data: ChallengePageData }) {
           )}
         </EmptyState>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <ShowMore initial={6} items={keys} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {pool.candidates.map((card) => (
             <EntryCard
               key={card.id}
@@ -94,9 +99,9 @@ export function PoolPanel({ data }: { data: ChallengePageData }) {
               }
             />
           ))}
-        </div>
+        </ShowMore>
       )}
-      <FilterEmpty items={pool.candidates.map((card) => entryFilterKey(card))} />
-    </section>
+      <FilterEmpty items={keys} />
+    </Fold>
   );
 }

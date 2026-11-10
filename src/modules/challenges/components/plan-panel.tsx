@@ -1,10 +1,11 @@
 import { CalendarPlus, Lightbulb, Plus, Undo2, X } from "lucide-react";
 import Link from "next/link";
-import { FilterDetails, FilterEmpty, FilteredCount, FilterGroup } from "@/components/item-filter";
+import { Fold, ShowMore } from "@/components/fold";
+import { FilterEmpty, FilteredCount, FilterGroup } from "@/components/item-filter";
 import { ActionForm } from "@/components/ui/action-form";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
-import { EmptyState, SectionTitle } from "@/components/ui/misc";
+import { EmptyState } from "@/components/ui/misc";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { cn } from "@/lib/utils";
 import { changeEntryStateAction } from "@/modules/entries/actions";
@@ -23,38 +24,50 @@ type PlanSlotView = Plan["slots"][number];
 /** A round that is over while someone is still to finish one of its items. */
 const isOverdue = (slot: PlanSlotView) => slot.entries.some((card) => card.tracking?.overdue);
 
-/** The rounds of a planning list: what was done, what is on now, what is planned or still open. */
+const keysOf = (slots: readonly PlanSlotView[]) => slots.flatMap((slot) => slot.entries.map((card) => entryFilterKey(card)));
+
+/**
+ * The rounds of a planning list. What is on now (and rounds over with someone still to go) and the
+ * next round are in sight; rounds that are over and those further ahead fold away, newest first.
+ */
 export function PlanPanel({ data }: { data: ChallengePageData }) {
   const plan = data.plan;
   if (!plan) return null;
-  // Past rounds fold away, except those still waiting for someone ("Zamanı geçti").
-  const past = plan.slots.filter((slot) => slot.timing === "past" && !isOverdue(slot));
-  const ahead = plan.slots.filter((slot) => slot.timing !== "past" || isOverdue(slot));
-  const filledPast = past.filter((slot) => slot.entries.length > 0).length;
+  const past = plan.slots.filter((slot) => slot.timing === "past" && !isOverdue(slot)).reverse();
+  const now = plan.slots.filter((slot) => slot.timing === "current" || (slot.timing === "past" && isOverdue(slot)));
+  // The next round stays in sight: a list that hasn't started yet is planned from there.
+  const [next, ...later] = plan.slots.filter((slot) => slot.timing === "future");
+  const shown = next ? [...now, next] : now;
+  const filled = (slots: readonly PlanSlotView[]) => slots.filter((slot) => slot.entries.length > 0).length;
 
   return (
-    <section>
-      <SectionTitle>Plan</SectionTitle>
+    <Fold remember="plan" title="Plan">
       {past.length > 0 ? (
-        <FilterDetails
-          items={past.flatMap((slot) => slot.entries.map((card) => entryFilterKey(card)))}
-          open={ahead.length === 0 || past.length <= 3}
-          className="group mb-4"
+        <Fold
+          level={3}
+          defaultOpen={false}
+          remember="plan-past"
+          items={keysOf(past)}
+          className="mb-4"
+          title={
+            <>
+              Geçmiş turlar{" "}
+              <span className="font-normal text-muted-foreground">
+                ({past.length}) · {filled(past)} dolu
+              </span>
+            </>
+          }
         >
-          <summary className="mb-3 cursor-pointer list-none text-sm font-medium text-muted-foreground">
-            Geçmiş turlar ({past.length}) · {filledPast} dolu · <span className="underline-offset-4 group-open:hidden hover:underline">göster</span>
-            <span className="hidden underline-offset-4 group-open:inline hover:underline">gizle</span>
-          </summary>
-          <ol className="flex flex-col gap-3">
+          <ShowMore initial={6} as="ol" className="flex flex-col gap-3">
             {past.map((slot) => (
               <SlotRow key={slot.index} slot={slot} data={data} />
             ))}
-          </ol>
-        </FilterDetails>
+          </ShowMore>
+        </Fold>
       ) : null}
-      {ahead.length > 0 ? (
+      {shown.length > 0 ? (
         <ol className="flex flex-col gap-3">
-          {ahead.map((slot) => (
+          {shown.map((slot) => (
             <SlotRow key={slot.index} slot={slot} data={data} />
           ))}
         </ol>
@@ -63,7 +76,30 @@ export function PlanPanel({ data }: { data: ChallengePageData }) {
           Liste başladığında turlar burada görünecek. Bu arada öneri ekleyebilirsiniz.
         </EmptyState>
       ) : null}
-    </section>
+      {later.length > 0 ? (
+        <Fold
+          level={3}
+          defaultOpen={false}
+          remember="plan-later"
+          items={keysOf(later)}
+          className="mt-4"
+          title={
+            <>
+              Sonraki turlar{" "}
+              <span className="font-normal text-muted-foreground">
+                ({later.length}) · {filled(later)} dolu
+              </span>
+            </>
+          }
+        >
+          <ShowMore initial={6} as="ol" className="flex flex-col gap-3">
+            {later.map((slot) => (
+              <SlotRow key={slot.index} slot={slot} data={data} />
+            ))}
+          </ShowMore>
+        </Fold>
+      ) : null}
+    </Fold>
   );
 }
 
@@ -136,23 +172,27 @@ export function SuggestionsPanel({ data }: { data: ChallengePageData }) {
   if (!plan) return null;
   const { suggestions } = plan;
   const participantCount = data.participants.filter((participant) => participant.isActive).length;
+  const keys = suggestions.map(({ card }) => entryFilterKey(card));
 
   return (
-    <section>
-      <SectionTitle
-        action={
-          plan.canEdit ? (
-            <Link href={`/challenges/${data.challenge.id}?add=1&mode=suggest`} className={buttonVariants({ variant: "outline", size: "sm" })}>
-              <Lightbulb /> Öneri ekle
-            </Link>
-          ) : null
-        }
-      >
-        Öneriler{" "}
-        <span className="font-normal text-muted-foreground">
-          (<FilteredCount items={suggestions.map(({ card }) => entryFilterKey(card))} />)
-        </span>
-      </SectionTitle>
+    <Fold
+      remember="suggestions"
+      title={
+        <>
+          Öneriler{" "}
+          <span className="font-normal text-muted-foreground">
+            (<FilteredCount items={keys} />)
+          </span>
+        </>
+      }
+      action={
+        plan.canEdit ? (
+          <Link href={`/challenges/${data.challenge.id}?add=1&mode=suggest`} className={buttonVariants({ variant: "outline", size: "sm" })}>
+            <Lightbulb /> Öneri ekle
+          </Link>
+        ) : null
+      }
+    >
       <p className="mb-4 text-sm text-muted-foreground">
         Aklına gelen ama henüz konuşmadığınız şeyler burada bekler. Listedeki başka biri kabul edip bir tura yerleştirir.
       </p>
@@ -161,7 +201,7 @@ export function SuggestionsPanel({ data }: { data: ChallengePageData }) {
           Bir şey aklına gelirse “Öneri ekle” ile not düş, unutulmasın.
         </EmptyState>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <ShowMore initial={6} items={keys} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {suggestions.map(({ card, canAccept }) => {
             const authoredByViewer = card.suggestedBy !== null && card.suggestedBy.id === data.viewerId;
             return (
@@ -211,10 +251,10 @@ export function SuggestionsPanel({ data }: { data: ChallengePageData }) {
               />
             );
           })}
-        </div>
+        </ShowMore>
       )}
-      <FilterEmpty items={suggestions.map(({ card }) => entryFilterKey(card))} />
-    </section>
+      <FilterEmpty items={keys} />
+    </Fold>
   );
 }
 
@@ -222,19 +262,26 @@ export function SuggestionsPanel({ data }: { data: ChallengePageData }) {
 export function DroppedPanel({ data }: { data: ChallengePageData }) {
   const dropped = data.plan?.dropped ?? [];
   if (dropped.length === 0) return null;
+  const keys = dropped.map((card) => entryFilterKey(card));
   return (
-    <FilterDetails items={dropped.map((card) => entryFilterKey(card))} className="group">
-      <summary className="mb-3 flex cursor-pointer list-none items-center gap-2 text-sm font-semibold">
-        <Badge tone="rose">Elenenler</Badge>
-        <span className="text-muted-foreground">
-          <FilteredCount items={dropped.map((card) => entryFilterKey(card))} /> · göster
-        </span>
-      </summary>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+    <Fold
+      defaultOpen={false}
+      remember="dropped"
+      items={keys}
+      title={
+        <>
+          <Badge tone="rose">Elenenler</Badge>
+          <span className="text-base font-normal text-muted-foreground">
+            <FilteredCount items={keys} />
+          </span>
+        </>
+      }
+    >
+      <ShowMore initial={6} items={keys} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {dropped.map((card) => (
           <EntryCard key={card.id} card={card} />
         ))}
-      </div>
-    </FilterDetails>
+      </ShowMore>
+    </Fold>
   );
 }

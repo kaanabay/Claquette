@@ -2,10 +2,11 @@
 
 import { Plus, StickyNote } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { Fold, ShowMore } from "@/components/fold";
 import { Button } from "@/components/ui/button";
 import { FormMessage } from "@/components/ui/form-message";
 import { highlight } from "@/components/ui/highlight";
-import { EmptyState, SectionTitle } from "@/components/ui/misc";
+import { EmptyState } from "@/components/ui/misc";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { toast } from "@/components/ui/toaster";
 import { useFormAction } from "@/components/ui/use-form-action";
@@ -27,28 +28,35 @@ export function BoardShell({
 }) {
   const [composing, setComposing] = useState(false);
   return (
-    <section id="pano" className="scroll-mt-24">
-      <SectionTitle
-        action={
-          composing ? null : (
-            <Button variant="outline" size="sm" onClick={() => setComposing(true)}>
-              <Plus /> Not ekle
-            </Button>
-          )
-        }
-      >
-        Pano <span className="font-normal text-muted-foreground">({count})</span>
-      </SectionTitle>
+    <Fold
+      id="pano"
+      remember="board-notes"
+      forceOpen={composing}
+      title={
+        <>
+          Pano <span className="font-normal text-muted-foreground">({count})</span>
+        </>
+      }
+      action={
+        composing ? null : (
+          <Button variant="outline" size="sm" onClick={() => setComposing(true)}>
+            <Plus /> Not ekle
+          </Button>
+        )
+      }
+    >
       <p className="mb-4 text-sm text-muted-foreground">{hint}</p>
       {composing ? <NoteComposer board={board} onClose={() => setComposing(false)} /> : null}
       {count > 0 ? (
-        <div className="columns-1 gap-3 sm:columns-2">{children}</div>
+        <ShowMore initial={6} className="columns-1 gap-3 sm:columns-2">
+          {children}
+        </ShowMore>
       ) : composing ? null : (
         <EmptyState icon={<StickyNote />} title="Pano boş">
           Aklınızdakileri buraya yazın: seçeceğiniz yönetmenler, bağlantılar, fikirler. Herkes ekleyip düzenleyebilir.
         </EmptyState>
       )}
-    </section>
+    </Fold>
   );
 }
 

@@ -39,12 +39,17 @@ import {
 import type { ListPageData } from "../queries";
 
 type Item = ListPageData["items"][number];
+
+/** How many items a long list shows at first, and how many more each press adds. */
+const PAGE = 50;
 type ShareTarget = ListPageData["shareTargets"][number];
 
 /**
  * The owner's view of a list: drag the handle (or focus it and use the arrow keys) to reorder,
  * add a note, remove an item, or suggest it to a shared list. The new order is saved at once.
  * Searched or filtered by type, the items keep their numbers and dragging pauses (the order covers them all).
+ * Sorted by date, name or year, a long list shows its first fifty, more on request; the hand-made order
+ * shows them all, since dragging moves an item among every other.
  */
 export function ListItemsEditor({
   listId,
@@ -61,6 +66,7 @@ export function ListItemsEditor({
   shareTargets: ShareTarget[];
 }) {
   const manual = sort === "manual";
+  const [limit, setLimit] = useState(PAGE);
   const filter = useItemFilter();
   const filtering = isFiltering(filter);
   const dndId = useId();
@@ -96,6 +102,12 @@ export function ListItemsEditor({
   }
 
   const byId = new Map(items.map((item) => [item.id, item]));
+  const visible = order.filter((id) => {
+    const item = byId.get(id);
+    return item !== undefined && matchesFilter(filter, mediaFilterKey(item.media));
+  });
+  const shown = manual || filtering ? visible : visible.slice(0, limit);
+  const rest = visible.length - shown.length;
   return (
     <div className="flex flex-col gap-2">
       {error ? (
@@ -109,21 +121,26 @@ export function ListItemsEditor({
       <DndContext id={dndId} sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <SortableContext items={order} strategy={verticalListSortingStrategy}>
           <ol className="flex flex-col gap-2">
-            {order.map((id, index) => {
-              const item = byId.get(id);
-              return item && matchesFilter(filter, mediaFilterKey(item.media)) ? (
+            {shown.map((id) => {
+              const item = byId.get(id)!;
+              return (
                 <SortableRow
                   key={id}
                   item={item}
-                  rank={isRanked && manual ? index + 1 : null}
+                  rank={isRanked && manual ? order.indexOf(id) + 1 : null}
                   draggable={manual && !filtering}
                   shareTargets={shareTargets}
                 />
-              ) : null;
+              );
             })}
           </ol>
         </SortableContext>
       </DndContext>
+      {rest > 0 ? (
+        <Button type="button" variant="ghost" size="sm" onClick={() => setLimit(limit + PAGE)} className="self-start">
+          Daha fazla göster <span className="font-normal text-muted-foreground">({rest})</span>
+        </Button>
+      ) : null}
     </div>
   );
 }
