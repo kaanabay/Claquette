@@ -252,7 +252,7 @@ export async function updateChallengeSettings(
   });
 
   // Items everyone still taking part has finished are done now; rounds ahead follow the new settings.
-  if (outcome.status === "saved" && left.length > 0) await settleEntries(challengeId);
+  if (outcome.status === "saved" && left.length > 0) await settleEntries(challengeId, userId);
   if (outcome.status === "saved") await replanUpcomingRounds(challengeId);
   return outcome;
 }

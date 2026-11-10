@@ -15,7 +15,7 @@ import { assigneesOf, progressOutcome } from "./tracking";
  * taking part has finished become done, "Tur dışı" ones included. Nothing is reopened: joining never
  * undoes a completion.
  */
-export async function settleEntries(challengeId: string): Promise<void> {
+export async function settleEntries(challengeId: string, byUserId: string | null = null): Promise<void> {
   const open = await db
     .select({
       id: entries.id,
@@ -54,7 +54,7 @@ export async function settleEntries(challengeId: string): Promise<void> {
         entryId: entry.id,
         actorId: null,
         type: "entry.state_changed",
-        data: { title: formatTitle(entry.media), from: entry.stateLabel, to: done.label, automatic: true },
+        data: { title: formatTitle(entry.media), from: entry.stateLabel, to: done.label, automatic: true, by: byUserId },
       });
     });
   }

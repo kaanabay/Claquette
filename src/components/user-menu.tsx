@@ -5,6 +5,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { isSiteAdmin } from "@/modules/admin/access";
 import { signOutAction } from "@/modules/auth/actions";
 import { getCurrentUser } from "@/modules/auth/session";
+import { NotificationBell } from "@/modules/notifications/components/notification-bell";
 
 export async function UserMenu() {
   const user = await getCurrentUser();
@@ -17,7 +18,8 @@ export async function UserMenu() {
   }
   const admin = await isSiteAdmin(user.id);
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-2 sm:gap-3">
+      <NotificationBell />
       {admin ? (
         <Link href="/admin" className={buttonVariants({ variant: "ghost", size: "icon" })} aria-label="Site yönetimi" title="Site yönetimi">
           <ShieldCheck />

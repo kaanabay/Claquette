@@ -82,6 +82,9 @@ Rules that keep this codebase working:
 - Profiles (`/people/<userId>`, `src/modules/people`) open to whoever shares a group with the person (`canViewProfile`)
   and show only what happened in the viewer's own groups (the site admin: every group); anyone else gets a 404, as if
   the person didn't exist. Link people with `PersonLink` / `profileHref`.
+- Notifications (`src/modules/notifications`) are the activity log read per person: nothing is copied per user, only
+  what they read (`notification_state.read_before`, `notification_reads`). A new activity type notifies the group's
+  members and the list's participants unless `isNotifiable` says otherwise; the bell asks `/api/notifications`.
 - Board notes (`board_notes`) are free text for people; the engine never reads them. Edits carry the version
   they started from and are refused if the note changed meanwhile.
 - After signing in, navigate with a full load (`window.location`): links prefetched while signed out

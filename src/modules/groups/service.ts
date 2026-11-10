@@ -157,7 +157,7 @@ export async function removeMember(userId: string, groupId: string, memberId: st
     await logActivity(tx, { groupId, actorId: userId, type: "member.removed", data: { name: member.name } });
   });
   for (const listId of listIds) {
-    await settleEntries(listId);
+    await settleEntries(listId, userId);
     await replanUpcomingRounds(listId);
   }
 }

@@ -612,7 +612,7 @@ export async function updateProgress(
     await logActivity(
       tx,
       leftPool
-        ? { ...base, actorId: null, type: "entry.off_round", data: { title: entry.title, from: "pool", automatic: true } }
+        ? { ...base, actorId: null, type: "entry.off_round", data: { title: entry.title, from: "pool", automatic: true, by: userId } }
         : {
             ...base,
             actorId: null,
@@ -622,6 +622,8 @@ export async function updateProgress(
               from: entry.stateLabel,
               to: next.label,
               automatic: true,
+              // Whose change set it off: they aren't notified about what they caused.
+              by: userId,
               reopened: target === "active",
               gaveUp: target === "dropped",
             },

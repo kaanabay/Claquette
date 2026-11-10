@@ -7,3 +7,4 @@ export * from "./entries";
 export * from "./activity";
 export * from "./lists";
 export * from "./boards";
+export * from "./notifications";

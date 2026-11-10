@@ -137,7 +137,7 @@ export async function leaveChallenge(userId: string, challengeId: string): Promi
     .where(and(eq(challengeParticipants.challengeId, challengeId), eq(challengeParticipants.userId, userId)));
   await logActivity(db, { groupId: challenge.groupId, challengeId, actorId: userId, type: "challenge.left" });
   // Items everyone still taking part has finished are done now.
-  await settleEntries(challengeId);
+  await settleEntries(challengeId, userId);
   await replanUpcomingRounds(challengeId);
 }
 

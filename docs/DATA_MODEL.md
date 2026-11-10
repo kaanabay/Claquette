@@ -1,6 +1,6 @@
 # Veri modeli
 
-Şemanın tek gerçek kaynağı `src/db/schema/*.ts`. SQL migration'ları `drizzle/` altında ondan üretiliyor (`npm run db:generate`). 22 tablo var; 5'i Better Auth'a ait.
+Şemanın tek gerçek kaynağı `src/db/schema/*.ts`. SQL migration'ları `drizzle/` altında ondan üretiliyor (`npm run db:generate`). 24 tablo var; 5'i Better Auth'a ait.
 
 Adlandırma: arayüzdeki **ortak liste** kodda ve veritabanında `challenges`; **kişisel liste** `lists`.
 
@@ -27,6 +27,8 @@ erDiagram
   entries ||--o{ notes : "notlar"
   entries ||--o{ entry_votes : "oylar"
   groups ||--o{ activities : "olay günlüğü"
+  users ||--o| notification_state : "neye kadar okudu"
+  activities ||--o{ notification_reads : "tek tek okunanlar"
   users ||--o{ lists : "kişisel listeler"
   lists ||--o{ list_items : "ögeler"
   media_items ||--o{ list_items : "içerik"
@@ -175,6 +177,15 @@ erDiagram
     bool is_pinned
     timestamptz deleted_at "geri alınabilir silme"
   }
+  notification_state {
+    text user_id PK
+    timestamptz read_before "öncesi okunmuş sayılır"
+  }
+  notification_reads {
+    text user_id PK
+    uuid activity_id PK
+    timestamptz read_at
+  }
 ```
 
 ## Tablolar
@@ -215,6 +226,10 @@ erDiagram
 
 ### Pano
 - **board_notes:** bir ortak listenin (`challenge_id`) ya da grubun kendisinin (`challenge_id` boş) panosundaki notlar: isteğe bağlı başlık, düz metin gövde, sabitleme. Gövdede `[ ]` / `[x]` ile başlayan satırlar işaretlenebilir liste olarak okunur; ayrı bir satır tablosu yok, çünkü notlar elle yazılıyor ve olduğu gibi yapıştırılıyor. Silinen not `deleted_at` ile gizlenir, silen kişi 10 dakika içinde geri alabilir. `created_by` / `updated_by` kim yazdı, kim son düzenledi. Motor bu tabloyu hiç okumaz.
+
+### Bildirimler
+- **notification_state:** kişinin bildirimlerini neye kadar okuduğu (`read_before`); "Tümünü okundu yap" bunu ileri alır. Satırı olmayan kişi hesabını açtığı andan önceki her şeyi okumuş sayılır; bildirimler gelince var olan kullanıcılar için migration geçmişi okunmuş saydı.
+- **notification_reads:** `read_before`'dan sonra tek tek okunan bildirimler. Bildirimlerin kendisi ayrı bir tabloda değil: kişinin gruplarındaki ve listelerindeki olay kaydı, kimin için olduğu okunurken hesaplanır (bkz. [ARCHITECTURE.md §6.5](ARCHITECTURE.md#65-bildirimler)).
 
 ## Tasarım kararları
 

@@ -11,7 +11,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
       <header className="sticky top-0 z-30 border-b bg-background/85 backdrop-blur print:hidden">
-        <div className="mx-auto flex h-16 w-full max-w-5xl items-center justify-between gap-3 px-4">
+        {/* relative: the notification panel opens against this row's right edge. */}
+        <div className="relative mx-auto flex h-16 w-full max-w-5xl items-center justify-between gap-3 px-4">
           <div className="flex min-w-0 items-center gap-2 sm:gap-6">
             <Logo />
             <MainNav />

@@ -57,6 +57,13 @@
       "when": 1794063388971,
       "tag": "0007_skipped_progress",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794322284915,
+      "tag": "0008_notifications",
+      "breakpoints": true
     }
   ]
 }
