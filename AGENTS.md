@@ -79,6 +79,9 @@ Rules that keep this codebase working:
   line (a `truncate`d title, a pasted link). Long words break by default (`overflow-wrap` on `body`), except in a box
   sized by its content (`items-start`, `w-fit`): give free text there `wrap-anywhere`. Dropdown panels
   (`absolute right-0`) open leftwards from their trigger, so such triggers sit at the end of their row.
+- Dropdown menus are `Menu` (`src/components/menu.tsx`, a `<details data-menu>`); `MenuBehavior` in the app layout
+  closes them on a click or focus elsewhere, Escape, opening another menu, or picking an item. A plain `<details>` is
+  a disclosure (a spoiler, a settings section), not a menu.
 - Sections fold (`Fold`, `src/components/fold.tsx`): what is on now starts open, what is over or still ahead starts
   folded, and the viewer's last choice per kind of section is kept in the browser (`remember`). Long lists show their
   first few with "Daha fazla göster" (`ShowMore`; logs five, card grids six); a search shows every match and opens folds.

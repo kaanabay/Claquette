@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { Logo } from "@/components/logo";
 import { MainNav } from "@/components/main-nav";
+import { MenuBehavior } from "@/components/menu";
 import { Skeleton } from "@/components/ui/misc";
 import { Toaster } from "@/components/ui/toaster";
 import { UserMenu } from "@/components/user-menu";
@@ -40,6 +41,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       </footer>
       <Toaster />
+      <MenuBehavior />
     </>
   );
 }

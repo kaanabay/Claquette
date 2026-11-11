@@ -15,6 +15,7 @@ import {
   StickyNote,
 } from "lucide-react";
 import Link from "next/link";
+import { Menu } from "@/components/menu";
 import { ActionForm } from "@/components/ui/action-form";
 import { AvatarStack } from "@/components/ui/avatar";
 import { profileHref } from "@/modules/people/components/person-link";
@@ -103,48 +104,43 @@ export function ChallengeHeader({
           <div className="ml-auto flex items-center gap-2">
             <ExportMenu base={`/challenges/${challenge.id}`} />
             {access.isParticipant || access.canManage ? (
-              <details className="relative">
-                <summary className={buttonVariants({ variant: "ghost", size: "icon" }) + " cursor-pointer list-none"} aria-label="Yönet">
-                  <Settings />
-                </summary>
-                <div className="absolute right-0 z-20 mt-2 flex w-56 flex-col gap-1 rounded-xl border bg-card p-2 shadow-lg">
-                  {access.canManage ? (
-                    <Link
-                      href={`/challenges/${challenge.id}/settings`}
-                      className={buttonVariants({ variant: "ghost", size: "sm", className: "justify-start" })}
-                    >
-                      <SlidersHorizontal /> Liste ayarları
-                    </Link>
-                  ) : null}
-                  {access.canManage ? (
-                    <ActionForm action={setChallengeStatusAction} className="flex flex-col gap-1">
-                      {hidden}
-                      {challenge.status === "active" ? (
-                        <SubmitButton variant="ghost" size="sm" name="status" value="paused" className="justify-start">
-                          <Pause /> Duraklat
-                        </SubmitButton>
-                      ) : (
-                        <SubmitButton variant="ghost" size="sm" name="status" value="active" className="justify-start">
-                          <Play /> {challenge.status === "archived" ? "Arşivden çıkar" : "Devam ettir"}
-                        </SubmitButton>
-                      )}
-                      {challenge.status !== "archived" ? (
-                        <SubmitButton variant="ghost" size="sm" name="status" value="archived" className="justify-start">
-                          <Archive /> Arşivle
-                        </SubmitButton>
-                      ) : null}
-                    </ActionForm>
-                  ) : null}
-                  {access.isParticipant ? (
-                    <ActionForm action={leaveChallengeAction} className="flex flex-col gap-1">
-                      {hidden}
-                      <SubmitButton variant="ghost" size="sm" className="justify-start text-destructive">
-                        <LogOut /> Listeden ayrıl
+              <Menu trigger={<Settings />} label="Yönet" summaryClassName={buttonVariants({ variant: "ghost", size: "icon" })}>
+                {access.canManage ? (
+                  <Link
+                    href={`/challenges/${challenge.id}/settings`}
+                    className={buttonVariants({ variant: "ghost", size: "sm", className: "justify-start" })}
+                  >
+                    <SlidersHorizontal /> Liste ayarları
+                  </Link>
+                ) : null}
+                {access.canManage ? (
+                  <ActionForm action={setChallengeStatusAction} className="flex flex-col gap-1">
+                    {hidden}
+                    {challenge.status === "active" ? (
+                      <SubmitButton variant="ghost" size="sm" name="status" value="paused" className="justify-start">
+                        <Pause /> Duraklat
                       </SubmitButton>
-                    </ActionForm>
-                  ) : null}
-                </div>
-              </details>
+                    ) : (
+                      <SubmitButton variant="ghost" size="sm" name="status" value="active" className="justify-start">
+                        <Play /> {challenge.status === "archived" ? "Arşivden çıkar" : "Devam ettir"}
+                      </SubmitButton>
+                    )}
+                    {challenge.status !== "archived" ? (
+                      <SubmitButton variant="ghost" size="sm" name="status" value="archived" className="justify-start">
+                        <Archive /> Arşivle
+                      </SubmitButton>
+                    ) : null}
+                  </ActionForm>
+                ) : null}
+                {access.isParticipant ? (
+                  <ActionForm action={leaveChallengeAction} className="flex flex-col gap-1">
+                    {hidden}
+                    <SubmitButton variant="ghost" size="sm" className="justify-start text-destructive">
+                      <LogOut /> Listeden ayrıl
+                    </SubmitButton>
+                  </ActionForm>
+                ) : null}
+              </Menu>
             ) : null}
           </div>
         </div>

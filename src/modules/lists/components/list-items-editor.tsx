@@ -15,6 +15,7 @@ import { CalendarDays, ExternalLink, GripVertical, MoreHorizontal, NotebookPen, 
 import Link from "next/link";
 import { useActionState, useId, useState, useTransition } from "react";
 import { isFiltering, matchesFilter, useItemFilter } from "@/components/item-filter";
+import { Menu } from "@/components/menu";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/fields";
 import { FormMessage } from "@/components/ui/form-message";
@@ -330,44 +331,42 @@ function ItemMenu({ item, shareTargets }: { item: Item; shareTargets: ShareTarge
   );
   if (targets.length === 0 && !item.media.externalUrl) return null;
   return (
-    <details className="relative shrink-0">
-      <summary
-        className="flex size-8 cursor-pointer list-none items-center justify-center rounded-md text-muted-foreground hover:bg-muted"
-        aria-label={`“${formatTitle(item.media)}” için seçenekler`}
-      >
-        <MoreHorizontal className="size-4" />
-      </summary>
-      <div className="absolute right-0 z-20 mt-1 flex w-64 flex-col gap-1 rounded-xl border bg-card p-2 text-sm shadow-lg">
-        {targets.length > 0 ? (
-          <>
-            <p className="px-2 pt-1 text-xs font-medium text-muted-foreground">Ortak listeye öner</p>
-            {targets.map((target) => (
-              <Link
-                key={target.id}
-                href={`/challenges/${target.id}?add=1&media=${item.media.id}&mode=suggest`}
-                className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted"
-              >
-                <Send className="size-3.5 shrink-0 text-muted-foreground" />
-                <span className="min-w-0">
-                  <span className="block truncate">{target.title}</span>
-                  <span className="block truncate text-xs text-muted-foreground">{target.groupName}</span>
-                </span>
-              </Link>
-            ))}
-            {item.media.externalUrl ? <hr className="my-1" /> : null}
-          </>
-        ) : null}
-        {item.media.externalUrl ? (
-          <a
-            href={item.media.externalUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted"
-          >
-            <ExternalLink className="size-3.5 text-muted-foreground" /> Kaynakta aç
-          </a>
-        ) : null}
-      </div>
-    </details>
+    <Menu
+      className="shrink-0"
+      trigger={<MoreHorizontal className="size-4" />}
+      label={`“${formatTitle(item.media)}” için seçenekler`}
+      summaryClassName="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted"
+      panelClassName="mt-1 w-64"
+  >
+      {targets.length > 0 ? (
+        <>
+          <p className="px-2 pt-1 text-xs font-medium text-muted-foreground">Ortak listeye öner</p>
+          {targets.map((target) => (
+            <Link
+              key={target.id}
+              href={`/challenges/${target.id}?add=1&media=${item.media.id}&mode=suggest`}
+              className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted"
+            >
+              <Send className="size-3.5 shrink-0 text-muted-foreground" />
+              <span className="min-w-0">
+                <span className="block truncate">{target.title}</span>
+                <span className="block truncate text-xs text-muted-foreground">{target.groupName}</span>
+              </span>
+            </Link>
+          ))}
+          {item.media.externalUrl ? <hr className="my-1" /> : null}
+        </>
+      ) : null}
+      {item.media.externalUrl ? (
+        <a
+          href={item.media.externalUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted"
+        >
+          <ExternalLink className="size-3.5 text-muted-foreground" /> Kaynakta aç
+        </a>
+      ) : null}
+    </Menu>
   );
 }
