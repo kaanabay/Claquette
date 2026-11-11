@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, count, desc, eq, inArray, isNotNull, lte, sql } from "drizzle-orm";
+import { and, asc, count, countDistinct, desc, eq, inArray, isNotNull, isNull, lte, notInArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   challengeParticipants,
@@ -23,6 +23,7 @@ import { type SortKey, sortRows } from "@/modules/media/sort";
 import type { CatalogPick } from "@/modules/media/types";
 import { canViewList, describeItemCounts } from "./domain";
 import { itemFinish, latestFinishes, markIsVisible, type ItemFinish } from "./finishes";
+import type { PickCandidate } from "./random-pick";
 
 const COVERS_PER_CARD = 4;
 
@@ -234,6 +235,7 @@ async function loadItemFinishes(userId: string, mediaItemIds: string[]): Promise
   return result;
 }
 
+/** The media columns a shelf or a pick shows. */
 const shelfMedia = {
   id: mediaItems.id,
   ...titleColumns,
@@ -242,6 +244,73 @@ const shelfMedia = {
   imageUrl: mediaItems.imageUrl,
   mediaType: mediaItems.mediaType,
 };
+
+/** Catalog items a person finished: marked on a personal list, or completed in a shared list of a group they are in. */
+async function finishedMediaIds(userId: string): Promise<string[]> {
+  const [marks, shared] = await Promise.all([
+    db.select({ id: mediaFinishes.mediaItemId }).from(mediaFinishes).where(eq(mediaFinishes.userId, userId)),
+    db
+      .select({ id: entries.mediaItemId })
+      .from(entryProgress)
+      .innerJoin(entries, eq(entries.id, entryProgress.entryId))
+      .innerJoin(challenges, eq(challenges.id, entries.challengeId))
+      .innerJoin(groupMembers, and(eq(groupMembers.groupId, challenges.groupId), eq(groupMembers.userId, userId)))
+      .where(finishedInSharedLists(userId)),
+  ]);
+  return [...new Set([...marks, ...shared].map((row) => row.id))];
+}
+
+/** How many candidates the dialog gets to draw from (and turn its reel with). */
+const PICK_POOL = 24;
+
+/**
+ * "Bana bir şey seç" across the lists: up to two dozen random items of the person's lists outside the
+ * archive (of `mediaType`, when given), each catalog item once and none of them finished. `total`
+ * counts them all, finished or not, so the dialog can tell "nothing here" from "all done".
+ */
+export async function pickCandidates(userId: string, mediaType: string | null): Promise<{ total: number; candidates: PickCandidate[] }> {
+  const finished = await finishedMediaIds(userId);
+  const scope = and(eq(lists.ownerId, userId), isNull(lists.archivedAt), mediaType ? eq(mediaItems.mediaType, mediaType) : undefined);
+  const [[counted], rows] = await Promise.all([
+    db
+      .select({ total: countDistinct(listItems.mediaItemId) })
+      .from(listItems)
+      .innerJoin(lists, eq(lists.id, listItems.listId))
+      .innerJoin(mediaItems, eq(mediaItems.id, listItems.mediaItemId))
+      .where(scope),
+    db
+      .select({
+        itemId: listItems.id,
+        listId: lists.id,
+        listTitle: lists.title,
+        media: shelfMedia,
+        icon: mediaTypes.icon,
+        externalUrl: mediaItems.externalUrl,
+      })
+      .from(listItems)
+      .innerJoin(lists, eq(lists.id, listItems.listId))
+      .innerJoin(mediaItems, eq(mediaItems.id, listItems.mediaItemId))
+      .innerJoin(mediaTypes, eq(mediaTypes.slug, mediaItems.mediaType))
+      .where(and(scope, finished.length > 0 ? notInArray(listItems.mediaItemId, finished) : undefined))
+      .orderBy(sql`random()`)
+      .limit(PICK_POOL * 3),
+  ]);
+  const seen = new Set<string>();
+  const candidates: PickCandidate[] = [];
+  for (const row of rows) {
+    if (seen.has(row.media.id) || candidates.length >= PICK_POOL) continue;
+    seen.add(row.media.id);
+    candidates.push({
+      key: row.itemId,
+      media: row.media,
+      icon: row.icon,
+      href: `/lists/${row.listId}#item-${row.itemId}`,
+      listTitle: row.listTitle,
+      externalUrl: row.externalUrl,
+    });
+  }
+  return { total: Number(counted?.total ?? 0), candidates };
+}
 
 /** A finished item on a shelf (a profile, the account archive), and where it was finished. */
 export type FinishedRow = {

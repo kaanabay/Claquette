@@ -16,6 +16,7 @@ import { VisibilityBadge } from "@/modules/lists/components/list-card";
 import { ArchiveListButton, DeleteListButton, ListSettingsForm } from "@/modules/lists/components/list-forms";
 import { ListItemsEditor } from "@/modules/lists/components/list-items-editor";
 import { ListView } from "@/modules/lists/components/list-view";
+import { RandomPick, type LocalCandidate } from "@/modules/lists/components/random-pick";
 import { SharePanel } from "@/modules/lists/components/share-panel";
 import { ExportMenu } from "@/modules/exports/components/export-menu";
 import { getListPage, getListTitle, getPublicListPreview } from "@/modules/lists/queries";
@@ -94,6 +95,16 @@ async function ListContent({ params, searchParams }: Pick<PageProps<"/lists/[lis
   }
 
   const mediaTypes = await listMediaTypes();
+  const candidates: LocalCandidate[] = items.map((item) => ({
+    key: item.id,
+    media: item.media,
+    icon: item.type.icon,
+    href: `#item-${item.id}`,
+    listTitle: null,
+    externalUrl: item.media.externalUrl,
+    filterKey: mediaFilterKey(item.media),
+    finished: item.finish !== null,
+  }));
   return (
     <div className="flex flex-col gap-8">
       <header className="flex flex-col gap-3">
@@ -155,7 +166,16 @@ async function ListContent({ params, searchParams }: Pick<PageProps<"/lists/[lis
           </Card>
           <section>
             <ItemFilterProvider>
-              <SectionTitle action={items.length > 1 ? <SortSelect value={sort} options={SORTS} save={setListSortAction.bind(null, list.id)} /> : null}>
+              <SectionTitle
+                action={
+                  items.length > 0 ? (
+                    <div className="flex items-center gap-2">
+                      <RandomPick local={candidates} />
+                      {items.length > 1 ? <SortSelect value={sort} options={SORTS} save={setListSortAction.bind(null, list.id)} /> : null}
+                    </div>
+                  ) : null
+                }
+              >
                 Ögeler <span className="font-normal text-muted-foreground">({items.length})</span>
               </SectionTitle>
               {items.length > 0 ? (

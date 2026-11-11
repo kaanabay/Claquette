@@ -88,6 +88,9 @@
 
 @theme {
   --animate-toast-in: toast-in 180ms ease-out;
+  --animate-pick-flip: pick-flip 110ms ease-out;
+  --animate-pick-pop: pick-pop 560ms cubic-bezier(0.2, 0.9, 0.3, 1.3);
+  --animate-pick-in: pick-in 420ms ease-out 120ms both;
 
   @keyframes toast-in {
     from {
@@ -95,6 +98,55 @@
       transform: translateY(0.5rem);
     }
   }
+
+  /* "Bana bir şey seç": the reel turning, the pick landing, its line coming in. */
+  @keyframes pick-flip {
+    from {
+      opacity: 0.3;
+      transform: translateY(-18%) scale(0.96);
+    }
+  }
+
+  @keyframes pick-pop {
+    0% {
+      opacity: 0;
+      transform: scale(0.55) rotate(-8deg);
+    }
+    60% {
+      opacity: 1;
+      transform: scale(1.08) rotate(2deg);
+    }
+    100% {
+      transform: scale(1) rotate(0deg);
+    }
+  }
+
+  @keyframes pick-in {
+    from {
+      opacity: 0;
+      transform: translateY(0.5rem);
+    }
+  }
+}
+
+/* Confetti as a random pick lands: each piece flies from the middle to its own spot (--x, --y, --r) and fades. */
+@keyframes pick-confetti {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.3);
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--x)), calc(-50% + var(--y))) rotate(var(--r)) scale(1.1);
+  }
+}
+
+.pick-confetti {
+  opacity: 0;
+  animation: pick-confetti 1200ms cubic-bezier(0.15, 0.8, 0.3, 1) forwards;
 }
 
 /* Something that was just added lights up for a moment (see components/ui/highlight.ts). */

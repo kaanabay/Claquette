@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState, SectionTitle } from "@/components/ui/misc";
 import { requireUser } from "@/modules/auth/session";
 import { ListCard } from "@/modules/lists/components/list-card";
+import { RandomPick } from "@/modules/lists/components/random-pick";
 import { CreateListForm } from "@/modules/lists/components/list-forms";
 import { listMyLists, type ListSummary } from "@/modules/lists/queries";
 
@@ -41,7 +42,7 @@ async function MyLists() {
         <ItemFilterProvider>
           <div className="flex min-w-0 flex-col gap-8">
             <section className="min-w-0">
-              <SectionTitle>
+              <SectionTitle action={current.some((list) => list.itemCount > 0) ? <RandomPick /> : null}>
                 Listeler{" "}
                 <span className="font-normal text-muted-foreground">
                   (<FilteredCount items={keys(current)} />)
