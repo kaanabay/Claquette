@@ -49,6 +49,19 @@ const data: AccountData = {
       ],
     },
   ],
+  finished: [
+    {
+      title: "İz Sürücü",
+      originalTitle: "Сталкер",
+      internationalTitle: "Stalker",
+      seasonNumber: null,
+      year: 1979,
+      creators: ["Andrei Tarkovsky"],
+      type: "Film",
+      finishedAt: new Date("2026-10-24T09:00:00Z"),
+      where: "İzlenecekler",
+    },
+  ],
   notes: [{ group: "Pazar Sineması", list: "Auteur Sineması", item: "Persona", visibility: "private", isSpoiler: false, body: "Finali tekrar izle.", createdAt: new Date() }],
 };
 
@@ -58,6 +71,7 @@ describe("buildAccountArchive", () => {
   it("puts every list, board and note into the archive, with unique file names", () => {
     expect(Object.keys(files).sort()).toEqual([
       "BENIOKU.txt",
+      "bitirdiklerim.csv",
       "claquette-verilerim.xlsx",
       "kisisel-listeler/2026-top-10-2.csv",
       "kisisel-listeler/2026-top-10-2.txt",
@@ -78,10 +92,14 @@ describe("buildAccountArchive", () => {
     expect(strFromU8(files["notlarim.txt"])).toContain("Persona · Auteur Sineması (Pazar Sineması)");
   });
 
+  it("lists what the user finished, with the day and where", () => {
+    expect(strFromU8(files["bitirdiklerim.csv"])).toContain("Stalker,İz Sürücü,Сталкер,,1979,Andrei Tarkovsky,Film,2026-10-24,İzlenecekler");
+  });
+
   it("holds one workbook sheet per list plus contents, notes and boards", () => {
     const workbook = unzipSync(files["claquette-verilerim.xlsx"]);
     const names = [...strFromU8(workbook["xl/workbook.xml"]).matchAll(/<sheet name="([^"]+)"/g)].map((match) => match[1]);
-    expect(names).toEqual(["İçindekiler", "2026 Top 10", "2026 top 10 (2)", "Auteur Sineması", "Notlarım", "Pano"]);
+    expect(names).toEqual(["İçindekiler", "2026 Top 10", "2026 top 10 (2)", "Auteur Sineması", "Bitirdiklerim", "Notlarım", "Pano"]);
   });
 
   it("keeps a machine-readable copy of everything", () => {

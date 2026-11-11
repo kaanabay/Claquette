@@ -1,6 +1,19 @@
 // "Verilerimi indir": everything of a user in one ZIP. Pure; account.ts loads the data.
 import { strToU8, zipSync } from "fflate";
-import { type Cell, type ExportDoc, fileSlug, formatDay, type Sheet, toCsv, toTable, toTxt, toWorkbook } from "./document";
+import {
+  type Cell,
+  type ExportDoc,
+  fileSlug,
+  type FinishedExport,
+  finishedTable,
+  formatDay,
+  type Sheet,
+  tableToCsv,
+  toCsv,
+  toTable,
+  toTxt,
+  toWorkbook,
+} from "./document";
 
 export type BoardNoteExport = {
   title: string | null;
@@ -21,6 +34,8 @@ export type AccountData = {
     /** The group's own board first, then one per shared list that has notes. */
     boards: { name: string; notes: BoardNoteExport[] }[];
   }[];
+  /** Everything the user finished, newest first: in shared lists, and marked on personal lists (private ones included). */
+  finished: FinishedExport[];
   /** Notes the user wrote on items of shared lists (private ones included). */
   notes: { group: string; list: string; item: string; visibility: "private" | "shared"; isSpoiler: boolean; body: string; createdAt: Date }[];
 };
@@ -58,6 +73,7 @@ function readme(data: AccountData): string {
     "- claquette-verilerim.xlsx: her liste ayrı bir sayfada; notların ve panolar da ayrı sayfalarda.",
     "- kisisel-listeler/: kişisel listelerin, her biri .csv ve .txt olarak.",
     "- ortak-listeler/<grup>/: üyesi olduğun gruplardaki ortak listelerin tüm ögeleri, kendi durumun ve puanınla.",
+    "- bitirdiklerim.csv: bitirdiğin her şey, günüyle: ortak listelerde bitirdiklerin ve kişisel listelerinde “İzledim” dediklerin.",
     "- pano/<grup>/: grup ve liste panolarındaki notlar.",
     "- notlarim.txt: ögelere yazdığın notlar (yalnız sana görünenler dahil).",
     "- veriler.json: hepsi, programların okuyabileceği biçimde.",
@@ -124,11 +140,13 @@ export function buildAccountArchive(data: AccountData): Uint8Array {
     toWorkbook([
       { name: "İçindekiler", columns: ["Liste", "Tür", "Grup", "Öge sayısı"], rows: contents },
       ...listSheets,
+      { name: "Bitirdiklerim", ...finishedTable(data.finished) },
       { name: "Notlarım", columns: ["Grup", "Liste", "Öge", "Görünürlük", "Spoiler", "Tarih", "Not"], rows: noteRows },
       { name: "Pano", columns: ["Grup", "Pano", "Başlık", "Not", "Yazan", "Sabit", "Eklenme", "Düzenlenme"], rows: boardRows },
     ]),
   );
 
+  add("bitirdiklerim.csv", tableToCsv(finishedTable(data.finished)));
   add(
     "notlarim.txt",
     data.notes.length === 0

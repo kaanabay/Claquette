@@ -1,4 +1,4 @@
-import { boolean, index, integer, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, index, integer, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { users } from "./auth";
 import { createdAt, updatedAt } from "./columns";
 import { mediaItems } from "./media";
@@ -26,6 +26,9 @@ export const lists = pgTable(
     // Set = in the owner's archive: folded at the bottom of "Listelerim". Nothing else changes (a public
     // list keeps its link), and the owner takes it back out whenever they like.
     archivedAt: timestamp("archived_at", { withTimezone: true }),
+    // What the owner does with an item they mark finished ("İzledim") here, when they asked the list to
+    // remember: true = take it off the list, false = keep it. Null = not remembered (the dialog keeps it).
+    removeWhenFinished: boolean("remove_when_finished"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -51,4 +54,25 @@ export const listItems = pgTable(
     uniqueIndex("list_items_list_media_idx").on(t.listId, t.mediaItemId),
     index("list_items_list_position_idx").on(t.listId, t.position),
   ],
+);
+
+// What a person finished outside the shared lists ("İzledim" on a personal list): one row per person and
+// catalog item, kept when the item leaves the list. The shared lists keep their own progress
+// (entry_progress); a profile shows both. Who else sees a mark follows the list it was marked on: a public
+// one shows it to the people the person shares a group with; a private one, or none, only to the person.
+export const mediaFinishes = pgTable(
+  "media_finishes",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    mediaItemId: uuid("media_item_id")
+      .notNull()
+      .references(() => mediaItems.id, { onDelete: "restrict" }),
+    listId: uuid("list_id").references(() => lists.id, { onDelete: "set null" }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }).notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.mediaItemId] }), index("media_finishes_list_idx").on(t.listId)],
 );

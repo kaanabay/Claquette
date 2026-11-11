@@ -3,7 +3,7 @@ import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db";
 import { boardNotes, challenges, entries, groupMembers, groups, mediaItems, notes, users } from "@/db/schema";
-import { listMyLists } from "@/modules/lists/queries";
+import { listMyLists, loadFinishedShelf } from "@/modules/lists/queries";
 import { titleColumns } from "@/modules/media/columns";
 import { formatTitle } from "@/modules/media/titles";
 import type { AccountData, BoardNoteExport } from "./archive";
@@ -29,7 +29,7 @@ export async function loadAccountData(userId: string): Promise<AccountData> {
   ]);
   const groupIds = memberships.map((group) => group.id);
 
-  const [personalDocs, sharedLists, boardRows, noteRows] = await Promise.all([
+  const [personalDocs, sharedLists, boardRows, noteRows, finished] = await Promise.all([
     Promise.all(myLists.map((list) => getListExport(userId, list.id))),
     groupIds.length
       ? db
@@ -73,6 +73,7 @@ export async function loadAccountData(userId: string): Promise<AccountData> {
       .innerJoin(groups, eq(groups.id, challenges.groupId))
       .where(eq(notes.authorId, userId))
       .orderBy(asc(notes.createdAt)),
+    loadFinishedShelf(userId, { groupIds, privateMarks: true }),
   ]);
 
   const sharedDocs = await Promise.all(sharedLists.map((list) => getChallengeExport(userId, list.id)));
@@ -103,6 +104,17 @@ export async function loadAccountData(userId: string): Promise<AccountData> {
         boards: [...boards].sort(([a], [b]) => Number(b === "Grup panosu") - Number(a === "Grup panosu")).map(([name, list]) => ({ name, notes: list })),
       };
     }),
+    finished: finished.map((row) => ({
+      title: row.media.title,
+      originalTitle: row.media.originalTitle,
+      internationalTitle: row.media.internationalTitle,
+      seasonNumber: row.media.seasonNumber,
+      year: row.media.year,
+      creators: row.media.creators,
+      type: row.type.label,
+      finishedAt: row.finishedAt,
+      where: row.source.title,
+    })),
     notes: noteRows.map((row) => ({
       group: row.group,
       list: row.list,

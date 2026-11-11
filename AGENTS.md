@@ -91,6 +91,13 @@ Rules that keep this codebase working:
 - Notifications (`src/modules/notifications`) are the activity log read per person: nothing is copied per user, only
   what they read (`notification_state.read_before`, `notification_reads`). A new activity type notifies the group's
   members and the list's participants unless `isNotifiable` says otherwise; the bell asks `/api/notifications`.
+- "İzledim" on a personal list is a mark of the person on the catalog item (`media_finishes`), not of the list: it shows
+  on every list of theirs holding the item and stays after the item leaves the list. Shared lists keep their own
+  progress (`entry_progress`); whatever says "finished" reads both (`itemFinish`, `loadFinishedShelf`,
+  `src/modules/lists/finishes.ts`). Others see a mark only if the list it was marked on is public (`markIsVisible`).
+  The dialog may start from the list's remembered choice (`remove_when_finished`) but never acts on its own.
+- Dialogs are `Modal` (`src/components/ui/modal.tsx`, a native modal `<dialog>`); it closes itself when its route
+  is hidden, or the page behind would stay inert.
 - Board notes (`board_notes`) are free text for people; the engine never reads them. Edits carry the version
   they started from and are refused if the note changed meanwhile.
 - After signing in, navigate with a full load (`window.location`): links prefetched while signed out

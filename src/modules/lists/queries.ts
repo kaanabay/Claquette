@@ -1,7 +1,20 @@
 import "server-only";
 import { and, asc, count, desc, eq, inArray, isNotNull, lte, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { challengeParticipants, challenges, groups, listItems, lists, mediaItems, mediaTypes, users } from "@/db/schema";
+import {
+  challengeParticipants,
+  challenges,
+  entries,
+  entryProgress,
+  groupMembers,
+  groups,
+  listItems,
+  lists,
+  mediaFinishes,
+  mediaItems,
+  mediaTypes,
+  users,
+} from "@/db/schema";
 import { searchText, type FilterKey } from "@/lib/search-text";
 import { isUuid } from "@/lib/utils";
 import { titleColumns } from "@/modules/media/columns";
@@ -9,6 +22,7 @@ import { describeExisting } from "@/modules/media/keys";
 import { type SortKey, sortRows } from "@/modules/media/sort";
 import type { CatalogPick } from "@/modules/media/types";
 import { canViewList, describeItemCounts } from "./domain";
+import { itemFinish, latestFinishes, markIsVisible, type ItemFinish } from "./finishes";
 
 const COVERS_PER_CARD = 4;
 
@@ -115,6 +129,7 @@ async function loadList(listId: string) {
       isRanked: lists.isRanked,
       sort: lists.sort,
       archivedAt: lists.archivedAt,
+      removeWhenFinished: lists.removeWhenFinished,
       updatedAt: lists.updatedAt,
     })
     .from(lists)
@@ -126,7 +141,8 @@ async function loadList(listId: string) {
 
 /**
  * The list for its owner (editable) or, when public, for anyone; null otherwise. Items come in
- * the list's saved order, or in `sort` when a viewer picked another one.
+ * the list's saved order, or in `sort` when a viewer picked another one. Only the owner learns what
+ * of it they finished (`finish`): their marks, and the shared lists they finished an item in.
  */
 export async function getListPage(viewerId: string | null, listId: string, options: { sort?: SortKey } = {}) {
   const list = await loadList(listId);
@@ -161,12 +177,17 @@ export async function getListPage(viewerId: string | null, listId: string, optio
     isOwner && viewerId ? listShareTargets(viewerId) : Promise.resolve([]),
   ]);
 
+  const finishes = isOwner && viewerId ? await loadItemFinishes(viewerId, items.map((item) => item.media.id)) : new Map<string, ItemFinish>();
   const sort = options.sort ?? list.sort;
   return {
     list,
     isOwner,
     sort,
-    items: sortRows(items, sort, (item) => item),
+    items: sortRows(
+      items.map((item) => ({ ...item, finish: finishes.get(item.media.id) ?? null })),
+      sort,
+      (item) => item,
+    ),
     countsLabel: stats.labels.get(list.id) ?? "Henüz boş",
     shareTargets,
     existing: describeExisting(items.map((item) => ({ ...item.media, href: `#item-${item.id}` }))),
@@ -174,6 +195,137 @@ export async function getListPage(viewerId: string | null, listId: string, optio
 }
 
 export type ListPageData = NonNullable<Awaited<ReturnType<typeof getListPage>>>;
+
+/** Progress rows in shared lists that count as finished for a person. */
+const finishedInSharedLists = (userId: string) => and(eq(entryProgress.userId, userId), eq(entryProgress.status, "completed"));
+
+/** What of these catalog items a person finished: marked on a personal list, or in a shared list of a group they are in. */
+async function loadItemFinishes(userId: string, mediaItemIds: string[]): Promise<Map<string, ItemFinish>> {
+  if (mediaItemIds.length === 0) return new Map();
+  const [marks, shared] = await Promise.all([
+    db
+      .select({ mediaItemId: mediaFinishes.mediaItemId, finishedAt: mediaFinishes.finishedAt })
+      .from(mediaFinishes)
+      .where(and(eq(mediaFinishes.userId, userId), inArray(mediaFinishes.mediaItemId, mediaItemIds))),
+    db
+      .select({
+        mediaItemId: entries.mediaItemId,
+        entryId: entries.id,
+        challengeTitle: challenges.title,
+        completedAt: entryProgress.completedAt,
+        updatedAt: entryProgress.updatedAt,
+      })
+      .from(entryProgress)
+      .innerJoin(entries, eq(entries.id, entryProgress.entryId))
+      .innerJoin(challenges, eq(challenges.id, entries.challengeId))
+      .innerJoin(groupMembers, and(eq(groupMembers.groupId, challenges.groupId), eq(groupMembers.userId, userId)))
+      .where(and(finishedInSharedLists(userId), inArray(entries.mediaItemId, mediaItemIds))),
+  ]);
+  const result = new Map<string, ItemFinish>();
+  for (const id of new Set(mediaItemIds)) {
+    const finish = itemFinish(
+      marks.find((mark) => mark.mediaItemId === id),
+      shared
+        .filter((row) => row.mediaItemId === id)
+        .map((row) => ({ entryId: row.entryId, challengeTitle: row.challengeTitle, finishedAt: row.completedAt ?? row.updatedAt })),
+    );
+    if (finish) result.set(id, finish);
+  }
+  return result;
+}
+
+const shelfMedia = {
+  id: mediaItems.id,
+  ...titleColumns,
+  year: mediaItems.year,
+  creators: mediaItems.creators,
+  imageUrl: mediaItems.imageUrl,
+  mediaType: mediaItems.mediaType,
+};
+
+/** A finished item on a shelf (a profile, the account archive), and where it was finished. */
+export type FinishedRow = {
+  mediaItemId: string;
+  finishedAt: Date;
+  media: {
+    id: string;
+    title: string;
+    originalTitle: string | null;
+    internationalTitle: string | null;
+    seasonNumber: number | null;
+    year: number | null;
+    creators: string[];
+    imageUrl: string | null;
+    mediaType: string;
+  };
+  type: { icon: string; label: string };
+  /** An item of a shared list, or a mark made on a personal list (whose list is null once deleted). */
+  source: { kind: "shared"; entryId: string; title: string } | { kind: "list"; listId: string | null; title: string | null };
+};
+
+/**
+ * Everything a person finished, one row per catalog item at its latest finish, newest first: what
+ * they finished in shared lists and what they marked on personal lists. `groupIds`: the groups whose
+ * shared lists count ("all" for the site admin); `privateMarks`: whether marks made on private (or
+ * deleted) lists count, which only the person may see.
+ */
+export async function loadFinishedShelf(
+  personId: string,
+  scope: { groupIds: readonly string[] | "all"; privateMarks: boolean },
+): Promise<FinishedRow[]> {
+  const noGroups = scope.groupIds !== "all" && scope.groupIds.length === 0;
+  const [shared, marks] = await Promise.all([
+    noGroups
+      ? Promise.resolve([])
+      : db
+          .select({
+            media: shelfMedia,
+            type: { icon: mediaTypes.icon, label: mediaTypes.label },
+            entryId: entries.id,
+            challengeTitle: challenges.title,
+            completedAt: entryProgress.completedAt,
+            updatedAt: entryProgress.updatedAt,
+          })
+          .from(entryProgress)
+          .innerJoin(entries, eq(entries.id, entryProgress.entryId))
+          .innerJoin(challenges, eq(challenges.id, entries.challengeId))
+          .innerJoin(mediaItems, eq(mediaItems.id, entries.mediaItemId))
+          .innerJoin(mediaTypes, eq(mediaTypes.slug, mediaItems.mediaType))
+          .where(and(finishedInSharedLists(personId), scope.groupIds === "all" ? undefined : inArray(challenges.groupId, [...scope.groupIds]))),
+    db
+      .select({
+        media: shelfMedia,
+        type: { icon: mediaTypes.icon, label: mediaTypes.label },
+        finishedAt: mediaFinishes.finishedAt,
+        listId: lists.id,
+        listTitle: lists.title,
+        visibility: lists.visibility,
+      })
+      .from(mediaFinishes)
+      .innerJoin(mediaItems, eq(mediaItems.id, mediaFinishes.mediaItemId))
+      .innerJoin(mediaTypes, eq(mediaTypes.slug, mediaItems.mediaType))
+      .leftJoin(lists, eq(lists.id, mediaFinishes.listId))
+      .where(eq(mediaFinishes.userId, personId)),
+  ]);
+  return latestFinishes<FinishedRow>([
+    ...shared.map((row) => ({
+      mediaItemId: row.media.id,
+      finishedAt: row.completedAt ?? row.updatedAt,
+      media: row.media,
+      type: row.type,
+      source: { kind: "shared" as const, entryId: row.entryId, title: row.challengeTitle },
+    })),
+    ...marks
+      .filter((row) => markIsVisible(scope.privateMarks, row.visibility))
+      .map((row) => ({
+        mediaItemId: row.media.id,
+        finishedAt: row.finishedAt,
+        media: row.media,
+        type: row.type,
+        source: { kind: "list" as const, listId: row.listId, title: row.listTitle },
+      })),
+  ]);
+}
 
 /** Shared lists the user can add to (active participant, active list): "Ortak listeye öner". */
 async function listShareTargets(userId: string) {

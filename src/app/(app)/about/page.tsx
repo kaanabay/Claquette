@@ -123,6 +123,11 @@ export default function AboutPage() {
             kapalıdır. Gizli listeleri yalnızca sahibi görür.
           </li>
           <li>
+            <span className="text-foreground">Bitirdiklerin:</span> ortak listelerde bitirdiklerin ve kişisel listelerinde “İzledim”
+            dediklerin profilinde toplanır. Herkese açık bir listede işaretlediklerini ortak gruplarındaki kişiler de görür; gizli
+            bir listede işaretlediklerin yalnız sana görünür (site yöneticisi dahil).
+          </li>
+          <li>
             <span className="text-foreground">Site yöneticisi:</span> uygulamayı işleten kişi, bakım ve destek için bütün grupları ve
             ortak listeleri görüp yönetebilir; unutulan bir şifreyi geçici bir şifreyle sıfırlayabilir. Yaptığı değişiklikler grubun
             akışında kendi adıyla görünür. Şifreler tek yönlü şifrelenmiş (hash) saklanır; yönetici dahil kimse göremez. Gizli

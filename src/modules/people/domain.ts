@@ -40,6 +40,13 @@ export function activityKind(type: string, data: Record<string, unknown>): Activ
 const IN_PROGRESS: Record<string, string> = { book: "Okuyor", movie: "İzliyor", tv: "İzliyor", podcast: "Dinliyor", game: "Oynuyor" };
 export const inProgressLabel = (mediaType: string) => IN_PROGRESS[mediaType] ?? "Devam ediyor";
 
+/** How many items of each type, most first: "Bu yıl 12 film · 3 kitap bitirdi". */
+export function countByType(rows: readonly { type: { label: string } }[]): { label: string; count: number }[] {
+  const counts = new Map<string, number>();
+  for (const row of rows) counts.set(row.type.label, (counts.get(row.type.label) ?? 0) + 1);
+  return [...counts].map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "tr"));
+}
+
 /** "12 film · 3 kitap": how many of each type, in the order given (most first). */
 export function describeTypeCounts(counts: readonly { label: string; count: number }[]): string {
   return counts.map(({ label, count }) => `${count} ${label.toLocaleLowerCase("tr-TR")}`).join(" · ");

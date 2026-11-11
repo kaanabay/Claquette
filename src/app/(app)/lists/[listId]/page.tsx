@@ -166,7 +166,14 @@ async function ListContent({ params, searchParams }: Pick<PageProps<"/lists/[lis
                       ? "Sırayı değiştirmek için soldaki tutamacı sürükle. Tarihe göre sıralamak için yukarıdan seç; seçimin listeyi açan herkes için geçerli olur."
                       : "Liste seçtiğin sıralamayla gösteriliyor; listeyi açan herkes böyle görür. Sürükleyerek sıralamak için “Elle”yi seç."}
                   </p>
-                  <ListItemsEditor listId={list.id} isRanked={list.isRanked} sort={sort} items={items} shareTargets={data.shareTargets} />
+                  <ListItemsEditor
+                    listId={list.id}
+                    isRanked={list.isRanked}
+                    sort={sort}
+                    items={items}
+                    shareTargets={data.shareTargets}
+                    removeWhenFinished={list.removeWhenFinished}
+                  />
                 </>
               ) : (
                 <EmptyState title="Liste boş">Yukarıdan ilk ögeyi ekle.</EmptyState>

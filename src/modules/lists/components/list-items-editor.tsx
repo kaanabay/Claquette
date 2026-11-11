@@ -38,6 +38,7 @@ import {
   updateListItemNoteAction,
 } from "../actions";
 import type { ListPageData } from "../queries";
+import { FinishControl } from "./finish-control";
 
 type Item = ListPageData["items"][number];
 
@@ -47,7 +48,8 @@ type ShareTarget = ListPageData["shareTargets"][number];
 
 /**
  * The owner's view of a list: drag the handle (or focus it and use the arrow keys) to reorder,
- * add a note, remove an item, or suggest it to a shared list. The new order is saved at once.
+ * mark an item finished ("İzledim"), add a note, remove an item, or suggest it to a shared list.
+ * The new order is saved at once.
  * Searched or filtered by type, the items keep their numbers and dragging pauses (the order covers them all).
  * Sorted by date, name or year, a long list shows its first fifty, more on request; the hand-made order
  * shows them all, since dragging moves an item among every other.
@@ -58,6 +60,7 @@ export function ListItemsEditor({
   sort,
   items,
   shareTargets,
+  removeWhenFinished,
 }: {
   listId: string;
   isRanked: boolean;
@@ -65,6 +68,8 @@ export function ListItemsEditor({
   sort: SortKey;
   items: Item[];
   shareTargets: ShareTarget[];
+  /** What the owner asked this list to remember about "İzledim" (null: nothing). */
+  removeWhenFinished: boolean | null;
 }) {
   const manual = sort === "manual";
   const [limit, setLimit] = useState(PAGE);
@@ -131,6 +136,7 @@ export function ListItemsEditor({
                   rank={isRanked && manual ? order.indexOf(id) + 1 : null}
                   draggable={manual && !filtering}
                   shareTargets={shareTargets}
+                  removeWhenFinished={removeWhenFinished}
                 />
               );
             })}
@@ -151,11 +157,13 @@ function SortableRow({
   rank,
   draggable,
   shareTargets,
+  removeWhenFinished,
 }: {
   item: Item;
   rank: number | null;
   draggable: boolean;
   shareTargets: ShareTarget[];
+  removeWhenFinished: boolean | null;
 }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id,
@@ -195,6 +203,7 @@ function SortableRow({
           <MediaTitle media={item.media} />
         </p>
         {meta ? <p className="truncate text-xs text-muted-foreground">{meta}</p> : null}
+        <FinishControl item={item} remembered={removeWhenFinished} />
         <DateEditor itemId={item.id} addedAt={item.addedAt} />
         <NoteEditor itemId={item.id} note={item.note} />
       </div>

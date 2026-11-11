@@ -1,7 +1,7 @@
 // Lists leave the app as files: Excel (XLSX), CSV and plain text; PDF is the print view. Pure:
 // route handlers load an ExportDoc (queries.ts) and pick a writer here.
 import { strToU8, zipSync } from "fflate";
-import { formatTitle, nativeTitle, splitTitle } from "@/modules/media/titles";
+import { formatTitle, nativeTitle, splitTitle, type Titled } from "@/modules/media/titles";
 
 export type ExportItem = {
   /** Shared lists: the round ("Kasım 2026"), "Öneri" or "Havuz". Personal lists: null. */
@@ -46,7 +46,7 @@ export const formatRating = (rating: number) => (Math.round(rating * 10) / 10).t
 const rounded = (rating: number | null) => (rating === null ? null : Math.round(rating * 10) / 10);
 
 /** Lead name, Turkish name when different, and the original in its own script when the lead stands in for it. */
-const nameCells = (item: ExportItem): Cell[] => {
+const nameCells = (item: Titled & { seasonNumber: number | null }): Cell[] => {
   const { lead, local } = splitTitle(item);
   return [lead, local, nativeTitle(item), item.seasonNumber];
 };
@@ -115,9 +115,28 @@ function csvCell(value: Cell): string {
 }
 
 /** RFC 4180 CSV with a BOM, so Excel reads Turkish letters right. */
-export function toCsv(doc: ExportDoc): string {
-  const { columns, rows } = toTable(doc);
+export function tableToCsv({ columns, rows }: { columns: string[]; rows: Cell[][] }): string {
   return `﻿${[columns, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n")}\r\n`;
+}
+
+export const toCsv = (doc: ExportDoc): string => tableToCsv(toTable(doc));
+
+/** Something the user finished, for the account archive: in a shared list or marked on a personal one. */
+export type FinishedExport = Titled & {
+  seasonNumber: number | null;
+  year: number | null;
+  creators: string[];
+  type: string;
+  finishedAt: Date;
+  /** The list where: a shared list, or a personal one (null once deleted). */
+  where: string | null;
+};
+
+export function finishedTable(rows: readonly FinishedExport[]): { columns: string[]; rows: Cell[][] } {
+  return {
+    columns: [...NAME_COLUMNS, "Yıl", "Yaratıcılar", "Tür", "Bitirdiğin gün", "Nerede"],
+    rows: rows.map((row) => [...nameCells(row), row.year, row.creators.join(", ") || null, row.type, formatDay(row.finishedAt), row.where]),
+  };
 }
 
 /** One line per item: "1. Stalker (İz Sürücü), 1979 — Andrei Tarkovsky". */

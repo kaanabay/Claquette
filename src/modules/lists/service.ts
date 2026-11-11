@@ -1,7 +1,7 @@
 import "server-only";
-import { count, eq, max, sql } from "drizzle-orm";
+import { and, count, eq, max, sql } from "drizzle-orm";
 import { db, type Executor, type Transaction } from "@/db";
-import { listItems, lists, mediaItems } from "@/db/schema";
+import { listItems, lists, mediaFinishes, mediaItems } from "@/db/schema";
 import { AppError, type BatchResult } from "@/lib/action-state";
 import { isUuid } from "@/lib/utils";
 import { resolveMediaItem, type MediaInput } from "@/modules/media/service";
@@ -9,6 +9,7 @@ import { titleColumns } from "@/modules/media/columns";
 import { formatTitle } from "@/modules/media/titles";
 import type { SortKey } from "@/modules/media/sort";
 import { isSameItemSet, MAX_LIST_ITEMS, type ListVisibility } from "./domain";
+import { rememberedChoice } from "./finishes";
 
 export type ListFields = { title: string; description: string | null; visibility: ListVisibility; isRanked: boolean };
 
@@ -154,6 +155,111 @@ export async function restoreListItem(userId: string, item: RemovedListItem): Pr
     if (inserted.length === 0) throw new AppError("Öge zaten listede.");
     await touch(tx, item.listId);
   });
+}
+
+/** What "Geri al" needs after a mark changed: the mark before (or none), the item if it left its list, what the list remembered. */
+export type FinishUndo = {
+  mediaItemId: string;
+  previous: { finishedAt: Date; listId: string | null } | null;
+  removed: RemovedListItem | null;
+  list: { id: string; removeWhenFinished: boolean | null } | null;
+};
+
+/**
+ * Marks a list item finished on `finishedAt` ("İzledim"; again = another day). The mark is the
+ * person's, for the catalog item: with `remove` the item also leaves the list and the mark stays.
+ * With `remember` the list keeps that choice for the next time; without it the list forgets any.
+ */
+export async function finishListItem(
+  userId: string,
+  itemId: string,
+  choice: { finishedAt: Date; remove: boolean; remember: boolean },
+): Promise<{ title: string; mediaType: string; undo: FinishUndo }> {
+  const owned = await requireOwnItem(userId, itemId);
+  const undo = await db.transaction(async (tx) => {
+    const [list] = await tx
+      .select({ ownerId: lists.ownerId, removeWhenFinished: lists.removeWhenFinished })
+      .from(lists)
+      .where(eq(lists.id, owned.listId))
+      .for("update");
+    const [item] = await tx.select().from(listItems).where(eq(listItems.id, itemId));
+    if (!list || list.ownerId !== userId || !item) throw new AppError("Öge bulunamadı.");
+
+    const [previous] = await tx
+      .select({ finishedAt: mediaFinishes.finishedAt, listId: mediaFinishes.listId })
+      .from(mediaFinishes)
+      .where(and(eq(mediaFinishes.userId, userId), eq(mediaFinishes.mediaItemId, item.mediaItemId)));
+    await tx
+      .insert(mediaFinishes)
+      .values({ userId, mediaItemId: item.mediaItemId, listId: item.listId, finishedAt: choice.finishedAt })
+      .onConflictDoUpdate({
+        target: [mediaFinishes.userId, mediaFinishes.mediaItemId],
+        set: { listId: item.listId, finishedAt: choice.finishedAt, updatedAt: new Date() },
+      });
+
+    const remembered = rememberedChoice(choice.remove, choice.remember);
+    const changedList = remembered !== list.removeWhenFinished;
+    if (changedList) await tx.update(lists).set({ removeWhenFinished: remembered }).where(eq(lists.id, item.listId));
+    if (choice.remove) {
+      await tx.delete(listItems).where(eq(listItems.id, item.id));
+      await touch(tx, item.listId);
+    }
+    return {
+      mediaItemId: item.mediaItemId,
+      previous: previous ?? null,
+      removed: choice.remove ? item : null,
+      list: changedList ? { id: item.listId, removeWhenFinished: list.removeWhenFinished } : null,
+    };
+  });
+  const [media] = await db
+    .select({ ...titleColumns, mediaType: mediaItems.mediaType })
+    .from(mediaItems)
+    .where(eq(mediaItems.id, undo.mediaItemId));
+  return { title: media ? formatTitle(media) : "Öge", mediaType: media?.mediaType ?? "other", undo };
+}
+
+/** Takes a mark off ("İşareti kaldır") and hands it back for "Geri al". */
+export async function unfinish(userId: string, mediaItemId: string): Promise<{ title: string; undo: FinishUndo }> {
+  if (!isUuid(mediaItemId)) throw new AppError("İşaret bulunamadı.");
+  const [previous] = await db
+    .delete(mediaFinishes)
+    .where(and(eq(mediaFinishes.userId, userId), eq(mediaFinishes.mediaItemId, mediaItemId)))
+    .returning({ finishedAt: mediaFinishes.finishedAt, listId: mediaFinishes.listId });
+  if (!previous) throw new AppError("İşaret bulunamadı.");
+  const [media] = await db.select(titleColumns).from(mediaItems).where(eq(mediaItems.id, mediaItemId));
+  return { title: media ? formatTitle(media) : "Öge", undo: { mediaItemId, previous, removed: null, list: null } };
+}
+
+async function ownsList(userId: string, listId: string): Promise<boolean> {
+  const [list] = await db.select({ ownerId: lists.ownerId }).from(lists).where(eq(lists.id, listId)).limit(1);
+  return list?.ownerId === userId;
+}
+
+/**
+ * "Geri al" after a mark or its removal: the item back on its list, what the list remembered, the
+ * mark as it was (or none). The data comes back from the browser, which is fine: it only touches the
+ * person's own mark and lists, with values they could set themselves.
+ */
+export async function undoFinish(userId: string, undo: FinishUndo): Promise<void> {
+  if (undo.removed) await restoreListItem(userId, undo.removed);
+  if (undo.list) {
+    await requireOwnList(userId, undo.list.id);
+    await db.update(lists).set({ removeWhenFinished: undo.list.removeWhenFinished }).where(eq(lists.id, undo.list.id));
+  }
+  const mark = and(eq(mediaFinishes.userId, userId), eq(mediaFinishes.mediaItemId, undo.mediaItemId));
+  if (!undo.previous) {
+    await db.delete(mediaFinishes).where(mark);
+    return;
+  }
+  // A mark only ever points at one of the person's own lists.
+  const listId = undo.previous.listId && (await ownsList(userId, undo.previous.listId)) ? undo.previous.listId : null;
+  await db
+    .insert(mediaFinishes)
+    .values({ userId, mediaItemId: undo.mediaItemId, listId, finishedAt: undo.previous.finishedAt })
+    .onConflictDoUpdate({
+      target: [mediaFinishes.userId, mediaFinishes.mediaItemId],
+      set: { listId, finishedAt: undo.previous.finishedAt, updatedAt: new Date() },
+    });
 }
 
 export async function updateListItemNote(userId: string, itemId: string, note: string | null): Promise<void> {

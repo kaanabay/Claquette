@@ -10,15 +10,20 @@ import { fromDayValue } from "@/lib/short-date";
 import { readMediaToAdd } from "@/modules/media/input";
 import { isSortKey, type SortKey } from "@/modules/media/sort";
 import { LIST_VISIBILITIES } from "./domain";
+import { finishedNotice } from "./finishes";
 import {
   addListItems,
   createList,
   deleteList,
+  finishListItem,
+  type FinishUndo,
   type RemovedListItem,
   removeListItem,
   reorderListItems,
   restoreListItem,
   setListArchived,
+  undoFinish,
+  unfinish,
   updateList,
   updateListItemDate,
   updateListItemNote,
@@ -173,6 +178,61 @@ export async function restoreListItemAction(item: RemovedListItem): Promise<Acti
   if (!parsed.success) return { error: "Öge geri alınamadı." };
   try {
     await restoreListItem(user.id, parsed.data);
+  } catch (error) {
+    return toActionState(error);
+  }
+  refresh();
+  return undefined;
+}
+
+const finishChoiceSchema = z.object({ itemId: z.uuid(), day: daySchema, remove: z.boolean(), remember: z.boolean() });
+
+/** Called directly from the "İzledim" dialog; hands back the notice and what its "Geri al" needs. */
+export async function finishListItemAction(input: {
+  itemId: string;
+  day: string;
+  remove: boolean;
+  remember: boolean;
+}): Promise<{ error: string } | { notice: string; undo: FinishUndo }> {
+  const user = await requireUser();
+  const parsed = finishChoiceSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "İşaretlenemedi." };
+  const { itemId, day, remove, remember } = parsed.data;
+  try {
+    const result = await finishListItem(user.id, itemId, { finishedAt: fromDayValue(day), remove, remember });
+    refresh();
+    return { notice: finishedNotice(result.title, result.mediaType, remove), undo: result.undo };
+  } catch (error) {
+    return { error: toActionState(error)?.error ?? "İşaretlenemedi." };
+  }
+}
+
+/** "İşareti kaldır" in the dialog; hands back the mark for "Geri al". */
+export async function unfinishAction(mediaItemId: string): Promise<{ error: string } | { title: string; undo: FinishUndo }> {
+  const user = await requireUser();
+  if (!z.uuid().safeParse(mediaItemId).success) return { error: "İşaret bulunamadı." };
+  try {
+    const result = await unfinish(user.id, mediaItemId);
+    refresh();
+    return result;
+  } catch (error) {
+    return { error: toActionState(error)?.error ?? "İşaret kaldırılamadı." };
+  }
+}
+
+const finishUndoSchema = z.object({
+  mediaItemId: z.uuid(),
+  previous: z.object({ finishedAt: z.coerce.date(), listId: z.uuid().nullable() }).nullable(),
+  removed: removedItemSchema.nullable(),
+  list: z.object({ id: z.uuid(), removeWhenFinished: z.boolean().nullable() }).nullable(),
+});
+
+export async function undoFinishAction(undo: FinishUndo): Promise<ActionState> {
+  const user = await requireUser();
+  const parsed = finishUndoSchema.safeParse(undo);
+  if (!parsed.success) return { error: "Geri alınamadı." };
+  try {
+    await undoFinish(user.id, parsed.data);
   } catch (error) {
     return toActionState(error);
   }

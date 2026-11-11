@@ -1,5 +1,5 @@
 import "server-only";
-import { and, avg, count, desc, eq, gte, inArray, max, ne, type SQL } from "drizzle-orm";
+import { and, avg, count, desc, eq, inArray, max, ne, type SQL } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 import { db } from "@/db";
 import {
@@ -19,9 +19,10 @@ import { searchText, type FilterKey } from "@/lib/search-text";
 import { describeActivity } from "@/modules/activity/describe";
 import { isSiteAdmin } from "@/modules/admin/access";
 import { todayIn } from "@/modules/challenges/domain/cadence";
-import { listMyLists } from "@/modules/lists/queries";
+import { listMyLists, loadFinishedShelf, type FinishedRow } from "@/modules/lists/queries";
 import { titleColumns } from "@/modules/media/columns";
-import { activityKind, canViewProfile, type ActivityKind } from "./domain";
+import { mediaFilterKey } from "@/modules/media/filter-key";
+import { activityKind, canViewProfile, countByType, type ActivityKind } from "./domain";
 
 /** How far back a profile's history goes. */
 const HISTORY_LIMIT = 500;
@@ -126,10 +127,20 @@ async function profileAccess(viewerId: string, personId: string) {
   return { person, shared, siteAdmin, visibleGroupIds: [...visible] };
 }
 
+/** A finished item on a profile: where it leads, where it was finished, how the page finds it. */
+export type ProfileFinish = FinishedRow & { href: string | null; where: string | null; filterKey: FilterKey };
+
+function toProfileFinish(row: FinishedRow): ProfileFinish {
+  const where = row.source.title;
+  const href = row.source.kind === "shared" ? `/entries/${row.source.entryId}` : row.source.listId ? `/lists/${row.source.listId}` : null;
+  return { ...row, href, where, filterKey: mediaFilterKey(row.media, [where]) };
+}
+
 /**
  * A person's profile as the viewer may see it: what they did in the groups the viewer is in (the
- * site admin: every group), what they are on now there, how many things they finished this year, and
- * their public personal lists. Null when the viewer shares no group with them (it looks missing).
+ * site admin: every group), what they are on now there, what they finished (there, and marked on
+ * personal lists: on public ones for others, on any for the person), and their public personal lists.
+ * Null when the viewer shares no group with them (it looks missing).
  */
 export async function getProfilePage(viewerId: string, personId: string) {
   const access = await profileAccess(viewerId, personId);
@@ -141,7 +152,7 @@ export async function getProfilePage(viewerId: string, personId: string) {
   const nothingVisible = !siteAdmin && visibleGroupIds.length === 0;
 
   const year = todayIn("Europe/Istanbul").slice(0, 4);
-  const [activityRows, nowRows, finishedByType, ratings, publicLists] = await Promise.all([
+  const [activityRows, nowRows, finished, ratings, publicLists] = await Promise.all([
     nothingVisible
       ? Promise.resolve([])
       : db
@@ -188,25 +199,7 @@ export async function getProfilePage(viewerId: string, personId: string) {
           )
           .orderBy(desc(entryProgress.updatedAt))
           .limit(12),
-    nothingVisible
-      ? Promise.resolve([])
-      : db
-          .select({ label: mediaTypes.label, count: count() })
-          .from(entryProgress)
-          .innerJoin(entries, eq(entries.id, entryProgress.entryId))
-          .innerJoin(challenges, eq(challenges.id, entries.challengeId))
-          .innerJoin(mediaItems, eq(mediaItems.id, entries.mediaItemId))
-          .innerJoin(mediaTypes, eq(mediaTypes.slug, mediaItems.mediaType))
-          .where(
-            and(
-              eq(entryProgress.userId, personId),
-              eq(entryProgress.status, "completed"),
-              gte(entryProgress.completedAt, new Date(`${year}-01-01T00:00:00+03:00`)),
-              inVisibleGroups(challenges.groupId),
-            ),
-          )
-          .groupBy(mediaTypes.label)
-          .orderBy(desc(count())),
+    loadFinishedShelf(personId, { groupIds: siteAdmin ? "all" : visibleGroupIds, privateMarks: isSelf }),
     nothingVisible
       ? Promise.resolve([])
       : db
@@ -233,6 +226,7 @@ export async function getProfilePage(viewerId: string, personId: string) {
     };
   });
   const rating = ratings[0];
+  const yearStart = new Date(`${year}-01-01T00:00:00+03:00`);
 
   return {
     person,
@@ -243,9 +237,10 @@ export async function getProfilePage(viewerId: string, personId: string) {
     history,
     historyTruncated: activityRows.length > HISTORY_LIMIT,
     now: nowRows,
+    finished: finished.map(toProfileFinish),
     stats: {
       year,
-      finished: finishedByType,
+      finished: countByType(finished.filter((row) => row.finishedAt >= yearStart)),
       averageRating: rating?.average ? Number(rating.average) : null,
       ratingCount: rating?.total ?? 0,
     },

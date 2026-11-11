@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activityKind, canViewProfile, describeTypeCounts, inProgressLabel } from "./domain";
+import { activityKind, canViewProfile, countByType, describeTypeCounts, inProgressLabel } from "./domain";
 
 describe("canViewProfile", () => {
   const base = { viewerId: "kaan", personId: "ayse", sharedGroups: 0, viewerIsSiteAdmin: false };
@@ -39,5 +39,18 @@ describe("labels", () => {
 
   it("counts by type in lower case", () => {
     expect(describeTypeCounts([{ label: "Film", count: 12 }, { label: "Kitap", count: 3 }])).toBe("12 film · 3 kitap");
+  });
+});
+
+describe("countByType", () => {
+  it("counts each type, most first", () => {
+    const film = { type: { label: "Film" } };
+    const book = { type: { label: "Kitap" } };
+    expect(countByType([film, book, film])).toEqual([
+      { label: "Film", count: 2 },
+      { label: "Kitap", count: 1 },
+    ]);
+    expect(describeTypeCounts(countByType([book, film, book]))).toBe("2 kitap · 1 film");
+    expect(countByType([])).toEqual([]);
   });
 });

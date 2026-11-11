@@ -63,10 +63,13 @@ const chip = (selected: boolean) =>
 export function ItemFilterBar({
   items,
   types = [],
+  searchLabel = "Bu sayfada ara",
   className,
 }: {
   items: readonly FilterKey[];
   types?: readonly TypeCount[];
+  /** Names the box where a page has more than one ("Bitirdiklerinde ara"). */
+  searchLabel?: string;
   className?: string;
 }) {
   const state = useContext(FilterContext);
@@ -87,8 +90,8 @@ export function ItemFilterBar({
             onKeyDown={(event) => {
               if (event.key === "Escape") setQuery("");
             }}
-            placeholder="Bu sayfada ara"
-            aria-label="Bu sayfada ara"
+            placeholder={searchLabel}
+            aria-label={searchLabel}
             className="pr-9 pl-9 [&::-webkit-search-cancel-button]:appearance-none"
           />
           {query ? (

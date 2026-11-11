@@ -4,7 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { Fold, ShowMore } from "@/components/fold";
-import { ItemFilterBar, ItemFilterProvider } from "@/components/item-filter";
+import { FilteredCount, ItemFilterBar, ItemFilterProvider, type TypeCount } from "@/components/item-filter";
 import { BackLink, PageSkeleton } from "@/components/page-skeleton";
 import { Avatar } from "@/components/ui/avatar";
 import { formatDate } from "@/lib/dates";
@@ -15,9 +15,10 @@ import { ListCard } from "@/modules/lists/components/list-card";
 import { MediaCover } from "@/modules/media/components/media-cover";
 import { MediaTitle } from "@/modules/media/components/media-title";
 import { formatTitle } from "@/modules/media/titles";
+import { FinishedShelf } from "@/modules/people/components/finished-shelf";
 import { ProfileHistory } from "@/modules/people/components/profile-history";
 import { ACTIVITY_KINDS, describeTypeCounts, inProgressLabel } from "@/modules/people/domain";
-import { getProfileName, getProfilePage } from "@/modules/people/queries";
+import { getProfileName, getProfilePage, type ProfileFinish } from "@/modules/people/queries";
 
 export async function generateMetadata({ params }: PageProps<"/people/[userId]">): Promise<Metadata> {
   const { userId } = await params;
@@ -39,7 +40,8 @@ async function Profile({ params }: Pick<PageProps<"/people/[userId]">, "params">
   const data = await getProfilePage(user.id, userId);
   // Someone who shares no group with the viewer looks exactly like nobody.
   if (!data) notFound();
-  const { person, isSelf, viaSiteAdmin, sharedGroups, history, historyTruncated, now, stats, publicLists } = data;
+  const { person, isSelf, viaSiteAdmin, sharedGroups, history, historyTruncated, now, finished, stats, publicLists } = data;
+  const finishedKeys = finished.map((row) => row.filterKey);
 
   const kinds = ACTIVITY_KINDS.map((kind) => ({ slug: kind.slug, label: kind.label, count: history.filter((item) => item.kind === kind.slug).length })).filter(
     (kind) => kind.count > 0,
@@ -83,7 +85,7 @@ async function Profile({ params }: Pick<PageProps<"/people/[userId]">, "params">
         <p className="flex items-start gap-2 rounded-xl bg-muted/60 p-3 text-sm text-muted-foreground">
           <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
           {isSelf
-            ? "Profilin, gruplarındaki kişilere böyle görünür: herkes yalnızca kendi de üye olduğu gruplardakini görür. Gizli listelerin ve kişisel notların görünmez."
+            ? "Profilin, gruplarındaki kişilere böyle görünür: herkes yalnızca kendi de üye olduğu gruplardakini görür. Gizli listelerin ve kişisel notların görünmez; gizli listelerinde “İzledim” dediklerini yalnız sen görürsün."
             : "Bu profile site yöneticisi olarak bakıyorsun; ortak bir grubunuz yok."}
         </p>
       ) : null}
@@ -115,6 +117,33 @@ async function Profile({ params }: Pick<PageProps<"/people/[userId]">, "params">
             </Fold>
           ) : null}
 
+          <ItemFilterProvider>
+            <Fold
+              remember="profile-finished"
+              title={
+                <>
+                  {isSelf ? "Bitirdiklerin" : "Bitirdikleri"}{" "}
+                  <span className="font-normal text-muted-foreground">
+                    (<FilteredCount items={finishedKeys} />)
+                  </span>
+                </>
+              }
+            >
+              {finished.length > 0 ? (
+                <>
+                  <ItemFilterBar items={finishedKeys} types={countFinishedTypes(finished)} searchLabel="Bitirdiklerinde ara" className="mb-4" />
+                  <FinishedShelf rows={finished} />
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  {isSelf
+                    ? "Henüz bir şey bitirmemişsin. Ortak listelerde bitirdiklerin ve kişisel listelerinde “İzledim” dediklerin burada toplanır."
+                    : "Henüz bitirdiği bir şey görünmüyor."}
+                </p>
+              )}
+            </Fold>
+          </ItemFilterProvider>
+
           <Fold remember="profile-history" title="Geçmiş">
             <ItemFilterProvider>
               <ItemFilterBar items={history.map((item) => item.filterKey)} types={kinds} className="mb-4" />
@@ -140,4 +169,15 @@ async function Profile({ params }: Pick<PageProps<"/people/[userId]">, "params">
       </div>
     </div>
   );
+}
+
+/** The media types of what the person finished, most first, for the shelf's type filter. */
+function countFinishedTypes(rows: readonly ProfileFinish[]): TypeCount[] {
+  const counts = new Map<string, TypeCount>();
+  for (const row of rows) {
+    const known = counts.get(row.media.mediaType);
+    if (known) known.count += 1;
+    else counts.set(row.media.mediaType, { slug: row.media.mediaType, label: row.type.label, icon: row.type.icon, count: 1 });
+  }
+  return [...counts.values()].sort((a, b) => b.count - a.count);
 }

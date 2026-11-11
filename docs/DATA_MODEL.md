@@ -1,6 +1,6 @@
 # Veri modeli
 
-Şemanın tek gerçek kaynağı `src/db/schema/*.ts`. SQL migration'ları `drizzle/` altında ondan üretiliyor (`npm run db:generate`). 24 tablo var; 5'i Better Auth'a ait.
+Şemanın tek gerçek kaynağı `src/db/schema/*.ts`. SQL migration'ları `drizzle/` altında ondan üretiliyor (`npm run db:generate`). 25 tablo var; 5'i Better Auth'a ait.
 
 Adlandırma: arayüzdeki **ortak liste** kodda ve veritabanında `challenges`; **kişisel liste** `lists`.
 
@@ -32,6 +32,9 @@ erDiagram
   users ||--o{ lists : "kişisel listeler"
   lists ||--o{ list_items : "ögeler"
   media_items ||--o{ list_items : "içerik"
+  users ||--o{ media_finishes : "bitirdikleri"
+  media_items ||--o{ media_finishes : "içerik"
+  lists |o--o{ media_finishes : "işaretlendiği liste"
   groups ||--o{ board_notes : "grup panosu"
   challenges |o--o{ board_notes : "liste panosu"
 
@@ -161,6 +164,13 @@ erDiagram
     bool is_ranked
     enum sort "manual, newest, oldest, title, year"
     timestamptz archived_at "boş = arşivde değil"
+    bool remove_when_finished "İzledim'de hatırlanan seçim; boş = yok"
+  }
+  media_finishes {
+    text user_id PK
+    uuid media_item_id PK
+    uuid list_id FK "işaretlendiği liste; silinirse boş"
+    timestamptz finished_at
   }
   list_items {
     uuid id PK
@@ -222,8 +232,9 @@ erDiagram
 - **activities:** sadece ekleme yapılan günlük. Grup akışını ve ögenin geçmişini besliyor. `data` alanı o anki başlık, durum ve tur adlarının kopyasını tutuyor; bir şey sonradan yeniden adlandırılsa da eski kayıtlar doğru okunuyor.
 
 ### Kişisel listeler
-- **lists:** bir kullanıcının listesi: ad, açıklama, görünürlük (`private` yalnızca sahibi, `public` linki olan herkes), `is_ranked` (numaralı gösterim) ve `sort` (listenin gösterildiği sıra: elle, tarihe, başlığa ya da yıla göre; sahibi seçer). `archived_at` doluysa liste sahibinin arşivindedir: Listelerim'in altında kapalı durur, başka hiçbir şeyi değişmez. Kullanıcı silinirse listeleri de silinir.
+- **lists:** bir kullanıcının listesi: ad, açıklama, görünürlük (`private` yalnızca sahibi, `public` linki olan herkes), `is_ranked` (numaralı gösterim) ve `sort` (listenin gösterildiği sıra: elle, tarihe, başlığa ya da yıla göre; sahibi seçer). `archived_at` doluysa liste sahibinin arşivindedir: Listelerim'in altında kapalı durur, başka hiçbir şeyi değişmez. `remove_when_finished` sahibin "İzledim" penceresinde hatırlattığı seçimdir (ögeyi çıkar ya da bırak; boşsa hatırlanmıyor). Kullanıcı silinirse listeleri de silinir.
 - **list_items:** listedeki ögeler. Aynı katalog ögesi bir listede bir kez bulunur; `position` elle belirlenen sıra (sürükle-bırak bütün sırayı tek sorguyla yeniden yazar), `note` ögeye düşülen kısa not, `added_at` ögenin günü (sahibi değiştirebilir; "İzlediklerim" gibi listelerde izleme günü). Katalog ortak olduğu için kişisel listedeki bir öge ortak listeye aynı satırla önerilebilir.
+- **media_finishes:** kişinin ortak listeler dışında bitirdikleri (kişisel listede "İzledim"): kişi ve katalog ögesi başına bir satır, `finished_at` bitirdiği gün (yeniden işaretlenince değişir), `list_id` işaretlendiği liste. İşaret listeye değil kişiye ait: öge listeden çıksa da kalır, liste silinirse `list_id` boşalır. Başkaları bir işareti yalnız `list_id` şu an herkese açık bir listeyse görür. Ortak listelerdeki ilerleme `entry_progress`'te kalır; profil ikisini birlikte gösterir.
 
 ### Pano
 - **board_notes:** bir ortak listenin (`challenge_id`) ya da grubun kendisinin (`challenge_id` boş) panosundaki notlar: isteğe bağlı başlık, düz metin gövde, sabitleme. Gövdede `[ ]` / `[x]` ile başlayan satırlar işaretlenebilir liste olarak okunur; ayrı bir satır tablosu yok, çünkü notlar elle yazılıyor ve olduğu gibi yapıştırılıyor. Silinen not `deleted_at` ile gizlenir, silen kişi 10 dakika içinde geri alabilir. `created_by` / `updated_by` kim yazdı, kim son düzenledi. Motor bu tabloyu hiç okumaz.
