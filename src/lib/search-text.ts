@@ -1,8 +1,11 @@
 // Searching what a page shows (pure; server and client). Case, accents and the Turkish i fold alike:
 // "isik" finds "Işık", "kieslowski" finds "Kieślowski", "lost 2" finds "Lost · 2. Sezon".
 
-/** What a page's item is found by: its media type (for the type filter) and its folded search text. */
-export type FilterKey = { type?: string; text?: string };
+/**
+ * What a page's item is found by: its media type (for the type filter) and its folded search text.
+ * Something that holds items of several types (a personal list's card) names them all in `types`.
+ */
+export type FilterKey = { type?: string; types?: readonly string[]; text?: string };
 
 /** Lower case without accents, dotted and dotless i alike, punctuation as single spaces. */
 export function foldForSearch(text: string): string {

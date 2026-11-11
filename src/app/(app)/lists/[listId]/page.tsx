@@ -1,4 +1,4 @@
-import { ListOrdered, Settings } from "lucide-react";
+import { Archive, ListOrdered, Settings } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -13,7 +13,7 @@ import { getCurrentUser } from "@/modules/auth/session";
 import { setListSortAction } from "@/modules/lists/actions";
 import { AddListItemForm } from "@/modules/lists/components/add-list-item-form";
 import { VisibilityBadge } from "@/modules/lists/components/list-card";
-import { DeleteListButton, ListSettingsForm } from "@/modules/lists/components/list-forms";
+import { ArchiveListButton, DeleteListButton, ListSettingsForm } from "@/modules/lists/components/list-forms";
 import { ListItemsEditor } from "@/modules/lists/components/list-items-editor";
 import { ListView } from "@/modules/lists/components/list-view";
 import { SharePanel } from "@/modules/lists/components/share-panel";
@@ -108,7 +108,13 @@ async function ListContent({ params, searchParams }: Pick<PageProps<"/lists/[lis
             </Badge>
           ) : null}
           <Badge>{data.countsLabel}</Badge>
-          <span className="ml-auto">
+          {list.archivedAt ? (
+            <Badge>
+              <Archive /> Arşivde
+            </Badge>
+          ) : null}
+          <span className="ml-auto flex items-center gap-1">
+            <ArchiveListButton listId={list.id} title={list.title} archived={list.archivedAt !== null} />
             <ExportMenu base={`/lists/${list.id}`} />
           </span>
         </div>

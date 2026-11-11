@@ -18,6 +18,7 @@ import {
   removeListItem,
   reorderListItems,
   restoreListItem,
+  setListArchived,
   updateList,
   updateListItemDate,
   updateListItemNote,
@@ -88,6 +89,19 @@ export async function setListVisibilityAction(_prev: ActionState, formData: Form
     z.object({ listId: z.uuid(), visibility: z.enum(LIST_VISIBILITIES) }),
     (userId, { listId, visibility }) => updateList(userId, listId, { visibility }),
   );
+}
+
+/** Called directly by the archive button (and its notice's "Geri al"). */
+export async function setListArchivedAction(listId: string, archived: boolean): Promise<ActionState> {
+  const user = await requireUser();
+  if (!z.uuid().safeParse(listId).success) return { error: "Liste bulunamadı." };
+  try {
+    await setListArchived(user.id, listId, archived === true);
+  } catch (error) {
+    return toActionState(error);
+  }
+  refresh();
+  return undefined;
 }
 
 export async function deleteListAction(_prev: ActionState, formData: FormData): Promise<ActionState> {

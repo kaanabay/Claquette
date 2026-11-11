@@ -1,15 +1,16 @@
 "use client";
 
-import { Globe, ListPlus, Lock, Save, Trash } from "lucide-react";
-import { useActionState } from "react";
+import { Archive, ArchiveRestore, Globe, ListPlus, Lock, Save, Trash } from "lucide-react";
+import { useActionState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox, Input, Label, Textarea } from "@/components/ui/fields";
 import { FieldError, FormMessage } from "@/components/ui/form-message";
 import { FreshAfterSubmit } from "@/components/ui/fresh-after-submit";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { useFieldId } from "@/components/ui/use-field-id";
+import { toast } from "@/components/ui/toaster";
 import { useFormAction } from "@/components/ui/use-form-action";
-import { createListAction, deleteListAction, updateListAction } from "../actions";
+import { createListAction, deleteListAction, setListArchivedAction, updateListAction } from "../actions";
 
 type ListValues = { title: string; description: string | null; visibility: "private" | "public"; isRanked: boolean };
 
@@ -96,6 +97,38 @@ export function ListSettingsForm({ listId, values }: { listId: string; values: L
         <Save /> Kaydet
       </SubmitButton>
     </form>
+  );
+}
+
+/** Puts the list into the owner's archive or takes it back out; the notice offers "Geri al". */
+export function ArchiveListButton({ listId, title, archived }: { listId: string; title: string; archived: boolean }) {
+  const [pending, startTransition] = useTransition();
+
+  function change(next: boolean, undo = true) {
+    startTransition(async () => {
+      const result = await setListArchivedAction(listId, next);
+      if (result?.error) {
+        toast(result.error, { isError: true });
+        return;
+      }
+      if (!undo) return;
+      toast(next ? `“${title}” arşive kaldırıldı. Listelerim’de en altta duruyor.` : `“${title}” arşivden çıkarıldı.`, {
+        action: { label: "Geri al", onClick: () => change(!next, false) },
+      });
+    });
+  }
+
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      disabled={pending}
+      onClick={() => change(!archived)}
+      title={archived ? "Listelerim’de yeniden öne al" : "Listelerim’de en alta, Arşiv’e kaldır"}
+    >
+      {archived ? <ArchiveRestore /> : <Archive />} {archived ? "Arşivden çıkar" : "Arşivle"}
+    </Button>
   );
 }
 

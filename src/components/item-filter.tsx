@@ -34,10 +34,15 @@ export const isFiltering = (filter: ItemFilter | null): filter is ItemFilter =>
 
 const isSearching = (filter: ItemFilter | null) => filter !== null && filter.words.length > 0;
 
-/** Whether an item passes: of the chosen type (items without a type always are), holding every word searched. */
+/**
+ * Whether an item passes: of the chosen type (items without a type always are; a card with `types`
+ * when it holds that type), holding every word searched.
+ */
 export function matchesFilter(filter: ItemFilter | null, key: FilterKey): boolean {
   if (!isFiltering(filter)) return true;
-  if (filter.type !== null && key.type !== undefined && key.type !== filter.type) return false;
+  if (filter.type !== null) {
+    if (key.types !== undefined ? !key.types.includes(filter.type) : key.type !== undefined && key.type !== filter.type) return false;
+  }
   return filter.words.length === 0 || (key.text !== undefined && matchesWords(key.text, filter.words));
 }
 
@@ -52,7 +57,8 @@ const chip = (selected: boolean) =>
 /**
  * The search box ("Bu sayfada ara") and, when the items are of two types or more, chips that filter
  * them by type. `items` are the page's items (each once), to say how many match. Hidden for fewer
- * than two items: there is nothing to look for.
+ * than two items: there is nothing to look for. "Tümü" counts the items; where one item holds several
+ * types (list cards) the type counts overlap.
  */
 export function ItemFilterBar({
   items,
@@ -67,7 +73,7 @@ export function ItemFilterBar({
   if (!state || items.length < 2) return null;
   const { filter, query, setType, setQuery } = state;
   const matches = isFiltering(filter) ? items.filter((key) => matchesFilter(filter, key)).length : null;
-  const total = types.reduce((sum, type) => sum + type.count, 0);
+  const total = items.length;
 
   return (
     <div className={cn("flex flex-col gap-2", className)}>

@@ -160,6 +160,7 @@ erDiagram
     enum visibility "private, public"
     bool is_ranked
     enum sort "manual, newest, oldest, title, year"
+    timestamptz archived_at "boş = arşivde değil"
   }
   list_items {
     uuid id PK
@@ -221,7 +222,7 @@ erDiagram
 - **activities:** sadece ekleme yapılan günlük. Grup akışını ve ögenin geçmişini besliyor. `data` alanı o anki başlık, durum ve tur adlarının kopyasını tutuyor; bir şey sonradan yeniden adlandırılsa da eski kayıtlar doğru okunuyor.
 
 ### Kişisel listeler
-- **lists:** bir kullanıcının listesi: ad, açıklama, görünürlük (`private` yalnızca sahibi, `public` linki olan herkes), `is_ranked` (numaralı gösterim) ve `sort` (listenin gösterildiği sıra: elle, tarihe, başlığa ya da yıla göre; sahibi seçer). Kullanıcı silinirse listeleri de silinir.
+- **lists:** bir kullanıcının listesi: ad, açıklama, görünürlük (`private` yalnızca sahibi, `public` linki olan herkes), `is_ranked` (numaralı gösterim) ve `sort` (listenin gösterildiği sıra: elle, tarihe, başlığa ya da yıla göre; sahibi seçer). `archived_at` doluysa liste sahibinin arşivindedir: Listelerim'in altında kapalı durur, başka hiçbir şeyi değişmez. Kullanıcı silinirse listeleri de silinir.
 - **list_items:** listedeki ögeler. Aynı katalog ögesi bir listede bir kez bulunur; `position` elle belirlenen sıra (sürükle-bırak bütün sırayı tek sorguyla yeniden yazar), `note` ögeye düşülen kısa not, `added_at` ögenin günü (sahibi değiştirebilir; "İzlediklerim" gibi listelerde izleme günü). Katalog ortak olduğu için kişisel listedeki bir öge ortak listeye aynı satırla önerilebilir.
 
 ### Pano

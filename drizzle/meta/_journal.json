@@ -64,6 +64,13 @@
       "when": 1794322284915,
       "tag": "0008_notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1794403698780,
+      "tag": "0009_list_archive",
+      "breakpoints": true
     }
   ]
 }

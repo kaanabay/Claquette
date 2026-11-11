@@ -23,6 +23,9 @@ export const lists = pgTable(
     // Ranked lists show their order as numbers (Top 10); every list keeps a manual order.
     isRanked: boolean("is_ranked").notNull().default(false),
     sort: listSort("sort").notNull().default("manual"),
+    // Set = in the owner's archive: folded at the bottom of "Listelerim". Nothing else changes (a public
+    // list keeps its link), and the owner takes it back out whenever they like.
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

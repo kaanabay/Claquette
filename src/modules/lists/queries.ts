@@ -1,7 +1,8 @@
 import "server-only";
-import { and, asc, count, desc, eq, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNotNull, lte, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { challengeParticipants, challenges, groups, listItems, lists, mediaItems, mediaTypes, users } from "@/db/schema";
+import { searchText, type FilterKey } from "@/lib/search-text";
 import { isUuid } from "@/lib/utils";
 import { titleColumns } from "@/modules/media/columns";
 import { describeExisting } from "@/modules/media/keys";
@@ -13,9 +14,14 @@ const COVERS_PER_CARD = 4;
 
 export type ListCover = { imageUrl: string | null; title: string; icon: string };
 
+/** A media type a list holds, and how many of it: for the type filter on "Listelerim". */
+export type ListType = { slug: string; label: string; icon: string; total: number };
+
 /** Item counts per media type and the first covers, for cards and previews. */
 async function loadListStats(listIds: string[]) {
-  if (listIds.length === 0) return { labels: new Map<string, string>(), totals: new Map<string, number>(), covers: new Map<string, ListCover[]>() };
+  if (listIds.length === 0) {
+    return { labels: new Map<string, string>(), totals: new Map<string, number>(), types: new Map<string, ListType[]>(), covers: new Map<string, ListCover[]>() };
+  }
 
   const ranked = db
     .select({
@@ -33,29 +39,38 @@ async function loadListStats(listIds: string[]) {
 
   const [counts, coverRows] = await Promise.all([
     db
-      .select({ listId: listItems.listId, mediaType: mediaItems.mediaType, total: count() })
+      .select({ listId: listItems.listId, mediaType: mediaItems.mediaType, label: mediaTypes.label, icon: mediaTypes.icon, total: count() })
       .from(listItems)
       .innerJoin(mediaItems, eq(mediaItems.id, listItems.mediaItemId))
+      .innerJoin(mediaTypes, eq(mediaTypes.slug, mediaItems.mediaType))
       .where(inArray(listItems.listId, listIds))
-      .groupBy(listItems.listId, mediaItems.mediaType),
+      .groupBy(listItems.listId, mediaItems.mediaType, mediaTypes.label, mediaTypes.icon),
     db.select().from(ranked).where(lte(ranked.rank, COVERS_PER_CARD)).orderBy(ranked.listId, ranked.rank),
   ]);
 
   const labels = new Map<string, string>();
   const totals = new Map<string, number>();
+  const types = new Map<string, ListType[]>();
   for (const id of listIds) {
     const own = counts.filter((row) => row.listId === id);
     labels.set(id, describeItemCounts(own));
     totals.set(id, own.reduce((sum, row) => sum + row.total, 0));
+    types.set(
+      id,
+      own.map((row) => ({ slug: row.mediaType, label: row.label, icon: row.icon, total: row.total })).sort((a, b) => b.total - a.total),
+    );
   }
   const covers = new Map<string, ListCover[]>();
   for (const row of coverRows) {
     covers.set(row.listId, [...(covers.get(row.listId) ?? []), { imageUrl: row.imageUrl, title: row.title, icon: row.icon }]);
   }
-  return { labels, totals, covers };
+  return { labels, totals, types, covers };
 }
 
-/** A person's personal lists, newest change first; `publicOnly` for someone else looking (a profile). */
+/**
+ * A person's personal lists, newest change first and archived ones last; `publicOnly` for someone
+ * else looking (a profile).
+ */
 export async function listMyLists(userId: string, options: { publicOnly?: boolean } = {}) {
   const rows = await db
     .select({
@@ -64,18 +79,25 @@ export async function listMyLists(userId: string, options: { publicOnly?: boolea
       description: lists.description,
       visibility: lists.visibility,
       isRanked: lists.isRanked,
+      archivedAt: lists.archivedAt,
       updatedAt: lists.updatedAt,
     })
     .from(lists)
     .where(and(eq(lists.ownerId, userId), options.publicOnly ? eq(lists.visibility, "public") : undefined))
-    .orderBy(desc(lists.updatedAt));
+    .orderBy(asc(isNotNull(lists.archivedAt)), desc(lists.updatedAt));
   const stats = await loadListStats(rows.map((row) => row.id));
-  return rows.map((row) => ({
-    ...row,
-    countsLabel: stats.labels.get(row.id) ?? "Henüz boş",
-    itemCount: stats.totals.get(row.id) ?? 0,
-    covers: stats.covers.get(row.id) ?? [],
-  }));
+  return rows.map((row) => {
+    const types = stats.types.get(row.id) ?? [];
+    return {
+      ...row,
+      countsLabel: stats.labels.get(row.id) ?? "Henüz boş",
+      itemCount: stats.totals.get(row.id) ?? 0,
+      types,
+      covers: stats.covers.get(row.id) ?? [],
+      /** Found on "Listelerim" by its name and description, and by the types it holds. */
+      filterKey: { types: types.map((type) => type.slug), text: searchText([row.title, row.description]) } satisfies FilterKey,
+    };
+  });
 }
 
 export type ListSummary = Awaited<ReturnType<typeof listMyLists>>[number];
@@ -92,6 +114,7 @@ async function loadList(listId: string) {
       visibility: lists.visibility,
       isRanked: lists.isRanked,
       sort: lists.sort,
+      archivedAt: lists.archivedAt,
       updatedAt: lists.updatedAt,
     })
     .from(lists)

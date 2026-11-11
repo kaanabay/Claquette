@@ -56,6 +56,15 @@ export async function updateList(userId: string, listId: string, fields: Partial
   await db.update(lists).set(fields).where(eq(lists.id, listId));
 }
 
+/** Into the owner's archive (folded at the bottom of "Listelerim") or back out; nothing else about the list changes. */
+export async function setListArchived(userId: string, listId: string, archived: boolean): Promise<void> {
+  await requireOwnList(userId, listId);
+  await db
+    .update(lists)
+    .set({ archivedAt: archived ? new Date() : null })
+    .where(eq(lists.id, listId));
+}
+
 export async function deleteList(userId: string, listId: string): Promise<void> {
   await requireOwnList(userId, listId);
   await db.delete(lists).where(eq(lists.id, listId));
